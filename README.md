@@ -7,7 +7,7 @@ Currently its configured for a Hybrid 365 System with a on premise exchange serv
 
 ## Formatting
 
-Usernames are currently configured for firstname.lastname
+Usernames are currently configured to be firstname.lastname
 
 ## Interactive Mode True
 Assuming the configuration script it run without and input.
