@@ -127,21 +127,21 @@ function Set-MSolUMFA{
     Sets MFA Status on a User
     .DESCRIPTION
     Checks if a connection to Msol is Present. If its not initiate one.
-    Checks the UserPrincipalName Exists to Msol, if it does sets the StrongAuthenticationRequiremets
+    Checks the UserPrincipalName Exists to Msol, if it does sets the StrongAuthenticationRequirements
     .PARAMETER UserPrincipalName
     UserprincipalName Use to Set MFA Enforced on
-    .PARAMETER StrongAuthenticationRequiremets
-    StrongAuthenticationRequiremets Required level of MFA
+    .PARAMETER StrongAuthenticationRequirements
+    StrongAuthenticationRequirements Required level of MFA
     .OUTPUTS
     system.boolean
     .INPUTS
     system.string UserprincipalName
-    system.string StrongAuthenticationRequiremets Level of MFA to set
+    system.string StrongAuthenticationRequirements Level of MFA to set
     #>
     [CmdletBinding(SupportsShouldProcess=$true)]
     param (
         [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)][string]$UserPrincipalName,
-        [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)][ValidateSet('Enabled','Disabled','Enforced')][String]$StrongAuthenticationRequiremets
+        [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)][ValidateSet('Enabled','Disabled','Enforced')][String]$StrongAuthenticationRequirements
     )
     begin{
         # Check if connected to Msol Session already
@@ -164,18 +164,18 @@ function Set-MSolUMFA{
         $TimeEnd = $timeStart.addminutes(1)
         $Finished=$false
         #Loop to check if the user exists already
-        if ($PSCmdlet.ShouldProcess($UserPrincipalName, "StrongAuthenticationRequiremets = "+$StrongAuthenticationRequiremets)) {
+        if ($PSCmdlet.ShouldProcess($UserPrincipalName, "StrongAuthenticationRequirements = "+$StrongAuthenticationRequirements)) {
             do {
                 $TimeNow = Get-Date
                 #Primary check for success condition
                 if (Get-MsolUser -UserPrincipalName $UserPrincipalName -ErrorAction SilentlyContinue) {
                     $Finished = $true
                     Write-Verbose('Found '+$UserPrincipalName+' In Msol')
-                    Write-Verbose('Attempting to Set MFA Status to: '+$StrongAuthenticationRequiremets)
+                    Write-Verbose('Attempting to Set MFA Status to: '+$StrongAuthenticationRequirements)
                     # Set some variables for MFA enforcement
                     $st = New-Object -TypeName Microsoft.Online.Administration.StrongAuthenticationRequirement
                     $st.RelyingParty = "*"
-                    $st.State = $StrongAuthenticationRequiremets
+                    $st.State = $StrongAuthenticationRequirements
                     $sta = @($st)
                     # Execute final command
                     try {
@@ -1145,7 +1145,7 @@ function New-CompanyUser {
         [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)][AllowEmptyString()][validateset('E1','E2','E3','')][string]$M365License,
         [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)][validateset('TRUE','FALSE')][string]$FileServerAccess,
         [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)][System.Collections.ArrayList]$MemberOf=@(),
-        [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)][validateset('Enabled','Disabled','Enforced')][String]$StrongAuthenticationRequiremets,        
+        [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)][validateset('Enabled','Disabled','Enforced')][String]$StrongAuthenticationRequirements,        
         [Parameter(Mandatory=$true)][String]$Domain,
         [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)][validateset('TRUE','FALSE')][string]$DistributionList='TRUE',
         [Parameter(Mandatory=$false)][PSCredential]$EMSCredentials,
@@ -1333,8 +1333,6 @@ function New-CompanyUser {
         #Convert the string variables to booleans
         [boolean]$DistributionList = [system.convert]::ToBoolean($DistributionList)
         [boolean]$FileServerAccess = [system.convert]::ToBoolean($FileServerAccess)
-        #Default Group to add all users
-        $null = $MemberOf.Add('All Users')
         #If FileServerAccess was set to True
         if ($FileServerAccess) {
             $null = $MemberOf.Add($ADA.$Branch.drive_group)
@@ -1420,7 +1418,6 @@ function New-CompanyUser {
                 $SplatActiveDirectory.Remove($Key)
                 Write-Verbose("Removed Empty Key: "+$Key)
             }
-
         }
         #endregion DataValidation
         #region DataConfirmation
@@ -1484,7 +1481,7 @@ function New-CompanyUser {
                                 Set-AADULicense -UserPrincipalName $UserprincipalName -LicenseType $M365License -Whatif:$WhatIfPreference
                             }
                             Write-Verbose('Setting user MFA')                      
-                            Set-MSolUMFA -UserPrincipalName $UserprincipalName -StrongAuthenticationRequiremets $StrongAuthenticationRequiremets -Whatif:$WhatIfPreference
+                            Set-MSolUMFA -UserPrincipalName $UserprincipalName -StrongAuthenticationRequirements $StrongAuthenticationRequirements -Whatif:$WhatIfPreference
                         }
                 }else{
                     Write-Verbose('No license specified for user, nothing will be assigned')
