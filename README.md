@@ -1,4 +1,4 @@
-# Sol; A Powershell Module
+# Sol - A Powershell Module
 Contains functions to create New Company Users
 
 Currently its configured for a Hybrid 365 System with a on premise exchange server.

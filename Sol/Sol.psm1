@@ -1085,9 +1085,9 @@ function Start-Logging{
     .SYNOPSIS
         Creates a spot to store transcripts from scripts
     .DESCRIPTION
-    Creates a folder called logs at the specified Path, then stores transcripts from script execution. 
-    These are prefixed with the $Name variable then a timestamp.
-    It will need a specified Number of logs default being 50, any logs older then this will be deleted
+        Creates a folder called logs at the specified Path, then stores transcripts from script execution. 
+        These are prefixed with the $Name variable then a timestamp.
+        It will need a specified Number of logs default being 50, any logs older then this will be deleted
     .PARAMETER Path
         system.string file path to store the logs in
     .PARAMETER Name
