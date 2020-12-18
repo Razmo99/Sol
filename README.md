@@ -5,6 +5,10 @@ Currently its configured for a Hybrid 365 System with a on premise exchange serv
 
 # How it works
 
+## Formatting
+
+Usernames are currently configured for firstname.lastname
+
 ## Interactive Mode True
 Assuming the configuration script it run without and input.
 
