@@ -72,7 +72,7 @@ function Test-AADConnected{
     End{
         #Check User have perms
         $AADCurrentSessionInfo = (Get-AzureADCurrentSessionInfo -ErrorAction Stop).Account.id
-        $AADDirectoryRole = (Get-AzureADDirectoryRole | Where-Object -Property DisplayName -eq 'Company Administrator').ObjectId
+        $AADDirectoryRole = (Get-AzureADDirectoryRole | Where-Object -Property DisplayName -eq 'Global Administrator').ObjectId
         if(!(Get-AzureADDirectoryRoleMember -ObjectId $AADDirectoryRole).UserPrincipalName.contains($AADCurrentSessionInfo)){
             Write-Warning('Insufficient Permissions')
             Disconnect-AzureAD
