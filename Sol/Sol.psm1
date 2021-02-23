@@ -397,7 +397,7 @@ function Set-AADULicense {
             }
         }elseif(($LicenseInfo.prepaidunits.enabled - $LicenseInfo.consumedunits) -eq 0){
             Write-Warning('No '+$LicenseType+' License Available. No License will be assigned')
-            Write-Verbose($LicenseInfo.prepaidunits.enabled + ' PrePaid | '+ $LicenseInfo.consumedunits + ' Consumed')
+            Write-Verbose(($LicenseInfo.prepaidunits.enabled).ToString() + ' PrePaid | '+ ($LicenseInfo.consumedunits).ToString() + ' Consumed')
             return
         }else {
             Write-Error -Message 'Unhandled Exception'
@@ -1210,10 +1210,10 @@ function New-CompanyUser {
         #Create the Username Variable from the First and Lastname.
         if ($Firstname -and $Lastname) {
             Write-Verbose('Setting Username')
-            $SamAccountName = $Firstname + '.' + $Lastname
+            $SamAccountName = ($Firstname + '.' + $Lastname).ToLower()
         #Logic is lastname isnt specified.
         }elseif (!$Lastname) {
-            $SamAccountName = $Firstname
+            $SamAccountName = $Firstname.ToLower()
             Write-Warning('No Lastname. Username will be set to Firstname')
         }
         if (!$PSCmdlet.MyInvocation.ExpectingInput){
@@ -1293,7 +1293,7 @@ function New-CompanyUser {
                 do {
                     $Finished=$false
                     try {
-                        $M365License = Read-Host("Office 365 License type") -ErrorAction Stop
+                        $M365License = Read-Host("Microsoft 365 License type:") -ErrorAction Stop
                         $Finished =$true
                     }
                     catch [System.Management.Automation.ValidationMetadataException]{
@@ -1478,7 +1478,9 @@ function New-CompanyUser {
                         if((Wait-AADUSynced -UserPrincipalName $UserprincipalName -Whatif:$WhatIfPreference) -or $WhatIfPreference){
                             if($M365License){
                                 Write-Verbose('Trying to assign a '+$M365License+' License to ; '+$UserprincipalName)
-                                Set-AADULicense -UserPrincipalName $UserprincipalName -LicenseType $M365License -Whatif:$WhatIfPreference
+                                if( !(Set-AADULicense -UserPrincipalName $UserprincipalName -LicenseType $M365License -Whatif:$WhatIfPreference) -and $Interactive){
+                                    Test-UserContinue(-Message 'No Microsoft 365 License assigned. Press any key to continue.')
+                                }                                
                             }
                             Write-Verbose('Setting user MFA')                      
                             Set-MSolUMFA -UserPrincipalName $UserprincipalName -StrongAuthenticationRequirements $StrongAuthenticationRequirements -Whatif:$WhatIfPreference
