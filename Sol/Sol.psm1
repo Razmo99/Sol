@@ -106,17 +106,45 @@ function Test-MSolConnected {
 function Test-UserContinue {
     [CmdletBinding()]
     param (
-        [Parameter(HelpMessage='Just a message about what we are skipping or entering info for.')][String]$Message
+        [Parameter(HelpMessage='Just a message about what we are skipping of entering info for')][String]$Message
     )
     if ($Message) {
         $response = read-host $Message
     }else{
-    $response = read-host "Press enter to confirm; or any other key (and then enter) to exit."
+    $response = read-host "Press enter to confirm; or any other key (and then enter) to exit"
     }
     $aborted = ! [bool]$response
     if(!$aborted){
         return $false
     }else{
+        return $true
+    }
+}
+
+function Test-EMSConnected {
+    <#
+    .SYNOPSIS
+    Checks if a connection to EMS is Present
+    .DESCRIPTION
+        Checks to see if an active ps session is present and if the command New-RemoteMailbox is available.
+        If it is not it checked for a stale session and removes it.
+        returns true if the command can be retreived false otherwise
+    .OUTPUTS
+        system.boolean
+    .INPUTS
+     None
+    #>    
+    $CheckExistingSession = Get-PSSession | Where-Object {$_.State -eq 'Opened' -and $_.ConfigurationName -eq 'Microsoft.Exchange'}
+    [bool]$CheckEMSCommandPresent = Get-Command New-RemoteMailbox -ErrorAction SilentlyContinue
+    if(!$CheckEMSCommandPresent){
+        Write-Verbose('Unable to get EMS Commands')
+        if ($CheckExistingSession) {
+            Write-Verbose('Removing stale PSSession')
+            $CheckExistingSession | Remove-PSSession
+        }
+        return $false
+    }elseif($CheckExistingSession) {
+        Write-Verbose('EMS Session Already Present')
         return $true
     }
 }
@@ -127,21 +155,21 @@ function Set-MSolUMFA{
     Sets MFA Status on a User
     .DESCRIPTION
     Checks if a connection to Msol is Present. If its not initiate one.
-    Checks the UserPrincipalName Exists to Msol, if it does sets the StrongAuthenticationRequirements
+    Checks the UserPrincipalName Exists to Msol, if it does sets the StrongAuthenticationRequiremets
     .PARAMETER UserPrincipalName
     UserprincipalName Use to Set MFA Enforced on
-    .PARAMETER StrongAuthenticationRequirements
-    StrongAuthenticationRequirements Required level of MFA
+    .PARAMETER StrongAuthenticationRequiremets
+    StrongAuthenticationRequiremets Required level of MFA
     .OUTPUTS
     system.boolean
     .INPUTS
     system.string UserprincipalName
-    system.string StrongAuthenticationRequirements Level of MFA to set
+    system.string StrongAuthenticationRequiremets Level of MFA to set
     #>
     [CmdletBinding(SupportsShouldProcess=$true)]
     param (
         [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)][string]$UserPrincipalName,
-        [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)][ValidateSet('Enabled','Disabled','Enforced')][String]$StrongAuthenticationRequirements
+        [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)][ValidateSet('Enabled','Disabled','Enforced')][String]$StrongAuthenticationRequiremets
     )
     begin{
         # Check if connected to Msol Session already
@@ -164,18 +192,18 @@ function Set-MSolUMFA{
         $TimeEnd = $timeStart.addminutes(1)
         $Finished=$false
         #Loop to check if the user exists already
-        if ($PSCmdlet.ShouldProcess($UserPrincipalName, "StrongAuthenticationRequirements = "+$StrongAuthenticationRequirements)) {
+        if ($PSCmdlet.ShouldProcess($UserPrincipalName, "StrongAuthenticationRequiremets = "+$StrongAuthenticationRequiremets)) {
             do {
                 $TimeNow = Get-Date
                 #Primary check for success condition
                 if (Get-MsolUser -UserPrincipalName $UserPrincipalName -ErrorAction SilentlyContinue) {
                     $Finished = $true
                     Write-Verbose('Found '+$UserPrincipalName+' In Msol')
-                    Write-Verbose('Attempting to Set MFA Status to: '+$StrongAuthenticationRequirements)
+                    Write-Verbose('Attempting to Set MFA Status to Enforced')
                     # Set some variables for MFA enforcement
                     $st = New-Object -TypeName Microsoft.Online.Administration.StrongAuthenticationRequirement
                     $st.RelyingParty = "*"
-                    $st.State = $StrongAuthenticationRequirements
+                    $st.State = $StrongAuthenticationRequiremets
                     $sta = @($st)
                     # Execute final command
                     try {
@@ -186,7 +214,7 @@ function Set-MSolUMFA{
                     catch {
                         Write-Error($_.Exception.Message)
                     }                
-                # if 1 minutes passes we just tap out and return false
+                # if 1 minutes passes we just tap out and exit the script
                 }elseif($TimeNow -ge $TimeEnd){
                     $Finished = $true
                     Write-Verbose('Failed to find user in Msol')
@@ -252,7 +280,6 @@ function Import-EMS {
                 Import-Module(Import-PSSession $EMS -DisableNameChecking -AllowClobber -ErrorAction Stop -CommandName Get-RemoteMailbox,New-RemoteMailbox) -Global
                 return $true
             }
-
         }
         #Catch for creds with out permission
         catch [System.Management.Automation.Remoting.PSRemotingTransportException]{
@@ -277,7 +304,7 @@ function Import-EMS {
                 }
             #If we dont get what we expect terminate
             }else {
-                Write-Error("unhandled error :(")
+                Write-Error($_.Exception.Message)
                 exit
             }
         }
@@ -289,23 +316,8 @@ function Import-EMS {
     }
     # We should be connect to EMS at this point. Lets check
     if ($PSCmdlet.ShouldProcess("LocalHost", "Get-Command New-RemoteMailbox")) {
-        [bool]$CheckEMSCommandPresent = Get-Command New-RemoteMailbox -ErrorAction SilentlyContinue
-        if(!$CheckEMSCommandPresent){
-            Write-Verbose('Unable to get EMS Commands')
-            if ($CheckExistingSession) {
-                Write-Verbose('Removing stale PSSession')
-                $CheckExistingSession | Remove-PSSession
-                [HashTable]$SplatRetry = @{Server=$Server}
-                if($Credential){$SplatNewPSSession.Add('Credential',$Credential)}
-                Import-EMS @SplatRetry
-            }
-            return $false
-        }elseif($CheckExistingSession) {
-            Write-Verbose('EMS Session Already Present')
-            return $true
-        }
+        Test-EMSConnected
     }
-
 }
 
 function Set-AADULicense {
@@ -397,8 +409,7 @@ function Set-AADULicense {
             }
         }elseif(($LicenseInfo.prepaidunits.enabled - $LicenseInfo.consumedunits) -eq 0){
             Write-Warning('No '+$LicenseType+' License Available. No License will be assigned')
-            Write-Verbose(($LicenseInfo.prepaidunits.enabled).ToString() + ' PrePaid | '+ ($LicenseInfo.consumedunits).ToString() + ' Consumed')
-            return
+            Write-Verbose($LicenseInfo.prepaidunits.enabled.ToString() + ' PrePaid | '+ $LicenseInfo.consumedunits.ToString() + ' Consumed')
         }else {
             Write-Error -Message 'Unhandled Exception'
         }
@@ -637,7 +648,106 @@ function Assert-EMSUExists {
     end {}
 }
 
-function Assert-SufficientPermission {
+function Assert-EMSPermission {
+    <#
+    .SYNOPSIS
+        Asserts the current user can create a PSSession to the specified server
+    .DESCRIPTION
+        tries to create a New-PSSession to the specified server
+        returns true for a match and false for no match
+    .PARAMETER Server
+        system.string Exchange Management server to assert against
+    .PARAMETER EMSAuth
+        Type of Auth to use when inititating the PSSession        
+    .INPUTS
+        system.string for EMSAuth
+        system.string for server
+    .OUTPUTS
+        system.boolean
+    #>
+    [CmdletBinding(SupportsShouldProcess=$true)]
+    param (
+        [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)][string]$Server,
+        [parameter(Mandatory=$false)][String][Validateset('Default','Basic','Credssp','Digest','Kerberos','Negotiate','NegotiateWithImplicitCredential')]$EMSAuth = "Kerberos",
+        [parameter(Mandatory=$false)][pscredential]$Credential
+    )
+    [hashtable]$SplatNewPSSession = @{
+        ConfigurationName = 'Microsoft.Exchange'
+        ConnectionUri = 'http://'+$Server+'/Powershell'
+        Authentication = $EMSAuth
+        ErrorAction = 'Stop'
+    }
+    #Add Credentials if presented
+    if ($Credential) {
+        Write-Verbose('Credentials provided')
+        $SplatNewPSSession.Add('Credential',$Credential)
+    }    
+    try {
+        if ($PSCmdlet.ShouldProcess($Server, "Testing New-PSSession on:")) {
+            $Session = New-PSSession @SplatNewPSSession
+            $Session | Remove-PSSession     
+        }
+        return $true
+    }
+    catch [System.Management.Automation.Remoting.PSRemotingTransportException]{
+        if ($_.Exception.Message.contains("AuthZ-CmdletAccessDeniedException")) {
+            return $false
+        }else{
+            Write-Error($_.Exception.Message)
+        }
+    }
+    catch {
+        Write-Error($_.Exception.Message)
+    }
+}
+
+function Assert-ADSyncPermission{
+    <#
+    .SYNOPSIS
+        Asserts the current user can create a PSSession to the specified server
+    .DESCRIPTION
+        tries to create a New-PSSession to the specified server
+        returns true for a match and false for no match
+    .PARAMETER Server
+        system.string Exchange Management server to assert against    
+    .INPUTS
+        system.pscredentials for Credential
+        system.string for server
+    .OUTPUTS
+        system.boolean
+    #>
+    [CmdletBinding(SupportsShouldProcess=$true)]
+    param (
+        [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)][string]$Server,
+        [parameter(Mandatory=$false)][pscredential]$Credential
+    )
+    [hashtable]$SplatNewPSSession = @{
+        ComputerName = $Server
+        ErrorAction = 'Stop'
+    }
+    #Add Credentials if presented
+    if ($Credential) {
+        Write-Verbose('Credentials provided')
+        $SplatNewPSSession.Add('Credential',$Credential)
+    }
+    try {
+        $Session = New-PSSession @SplatNewPSSession
+        $Session | Remove-PSSession
+        return $true
+    }
+    catch [System.Management.Automation.ErrorRecord]{
+        if ($_.Exception.Message.contains('Access is denied')){
+            return $false
+        }else{
+            Write-Error($_.Exception.Message)
+        }
+    }
+    catch{
+        Write-Error($_.Exception.Message)
+    } 
+}
+
+function Assert-ADPermission {
     <#
     .SYNOPSIS
     Asserts the current user is parts of the specified admin groups
@@ -708,6 +818,7 @@ function Sync-Directories{
         system.string Domain Controller to execute the search on
     .PARAMETER ActiveDirectory
         Switch to sync ActiveDirectory
+
     .PARAMETER AzureActiveDirectory
         Switch to Sync Azure Active Directory Connector
     .INPUTS
@@ -1085,9 +1196,9 @@ function Start-Logging{
     .SYNOPSIS
         Creates a spot to store transcripts from scripts
     .DESCRIPTION
-        Creates a folder called logs at the specified Path, then stores transcripts from script execution. 
-        These are prefixed with the $Name variable then a timestamp.
-        It will need a specified Number of logs default being 50, any logs older then this will be deleted
+    Creates a folder called logs at the specified Path, then stores transcripts from script execution. 
+    These are prefixed with the $Name variable then a timestamp.
+    It will need a specified Number of logs default being 50, any logs older then this will be deleted
     .PARAMETER Path
         system.string file path to store the logs in
     .PARAMETER Name
@@ -1145,7 +1256,7 @@ function New-CompanyUser {
         [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)][AllowEmptyString()][validateset('E1','E2','E3','')][string]$M365License,
         [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)][validateset('TRUE','FALSE')][string]$FileServerAccess,
         [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)][System.Collections.ArrayList]$MemberOf=@(),
-        [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)][validateset('Enabled','Disabled','Enforced')][String]$StrongAuthenticationRequirements,        
+        [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)][validateset('Enabled','Disabled','Enforced')][String]$StrongAuthenticationRequiremets,        
         [Parameter(Mandatory=$true)][String]$Domain,
         [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)][validateset('TRUE','FALSE')][string]$DistributionList='TRUE',
         [Parameter(Mandatory=$false)][PSCredential]$EMSCredentials,
@@ -1167,7 +1278,7 @@ function New-CompanyUser {
         if ($PSCmdlet.MyInvocation.ExpectingInput){
         Start-Logging -Path $CurrentPath -Name $Domain
         }
-        #Find a DomainController to execute all AD Commands on
+        #Grab a DomainController to execute all AD Commands on
         try {
             $DomainController = (Get-ADDomainController -Discover -Domain $Domain -Service "PrimaryDC" -ErrorAction Stop).Hostname.Value
             Write-Verbose('Executing AD commands on: '+ $DomainController)
@@ -1176,7 +1287,7 @@ function New-CompanyUser {
             Write-Error($_.Exception.Message)
             exit
         }
-        #Check for XML Doc Path | Some stuff to handle if the file doesnt exist
+        #Create Quick call for XML Doc Path | Some stuff to handle if the file doesnt exist
         try {
             [xml]$XmlDocument = Get-Content -Path ($CurrentPath + '\BRANCHES.XML') -ErrorAction Stop
             $ADA = $XmlDocument.$Company
@@ -1184,25 +1295,66 @@ function New-CompanyUser {
         catch [System.Management.Automation.ItemNotFoundException]{
             Write-Warning('Unable to Find BRANCHES.XML, no Branch information will be added')
         }
+        #Var to know if a EMS Credential has been set and is a known good
+        $ADCredSet=$true
+        $EMSCredSet=$false
+        $ADSyncCredSet=$false
         #Check if the current user has permissions to make changes in AD
-        if (!(Assert-SufficientPermission -Server $DomainController -AdminGroups $AdminGroups)) {
-            Write-Verbose('requesting creds with required perms')
+        if (!(Assert-ADPermission -Server $DomainController -AdminGroups $AdminGroups)) {
+            Write-Verbose('Requesting credentials with required perms')
             if(!$WhatIfPreference){
-                [pscredential]$Creds = Get-Credential -Message 'AD Credentials with sufficient privilages required' -UserName ($Domain+'\')
-                if(!$Creds){
+                [pscredential]$ADCredentials = Get-Credential -Message 'AD Credentials with sufficient privilages required' -UserName ($Domain+'\')
+                if(!$ADCredentials){
                     Write-Error('No AD credentials provided.')
                     exit
+                $ADCredSet=$true
+                }else{
+                    #Check the provided credentials against other systems to cut down on amount of credentials that need to be entered in
+                    if (Assert-EMSPermission -Server $EMSServer -Credential $ADCredentials){
+                        $EMSCredentials = $ADCredentials
+                        $EMSCredSet=$True
+                    }
+                    if (Assert-ADSyncPermission -Server $ADSyncServer -Credential $ADCredentials){
+                        $ADSyncCredentials = $ADCredentials
+                        $ADSyncCredSet = $true
+                    }                    
                 }
             }
         }
+        #Detect if the current user or provided credentials are sufficient to get into the EMS Server
+        if (!(Assert-EMSPermission -Server $EMSServer) -and !$EMSCredentials) {
+            Write-Verbose('Requesting Exchange management credentials.')
+            if (!$WhatIfPreference) {
+                [pscredential]$EMSCredentials = Get-Credential -Message 'Exchange Management Credentials for '+$Server+' required'
+                if (!$EMSCredentials){
+                    Write-Error('No EMS credentials provided.')
+                    exit
+                }
+                $EMSCredSet=$true
+            }
+        }elseif($EMSCredentials -and !$EMSCredSet){
+            if (!(Assert-EMSPermission -Server $EMSServer -Credential $EMSCredentials)){
+                Write-Verbose('Requesting Exchange management credentials.')
+                if (!$WhatIfPreference) {
+                    $EMSCredentials = $null
+                    [pscredential]$EMSCredentials = Get-Credential -Message 'Exchange Management Credentials for '+$Server+' required'
+                    if (!$EMSCredentials){
+                        Write-Error('No EMS credentials provided.')
+                        exit
+                    }
+                    $EMSCredSet=$true
+                }
+            }
+        }     
         #Detect if the function is being used in a pipeline
-        if ($PSCmdlet.MyInvocation.ExpectingInput -and !$ADSyncCredentials) {
+        if ($PSCmdlet.MyInvocation.ExpectingInput -and !$ADSyncCredentials -and !$ADSyncCredSet) {
             Write-Verbose('Pipeline input detected, requesting credentials for: '+$ADSyncServer)
             [pscredential]$ADSyncCredentials = Get-Credential -Message ('Enter Credentials for: '+$ADSyncServer)
             if(!$ADSyncCredentials){
                 Write-Error('No ADSync credentials provided.')
                 exit
             }
+            $ADSyncCredSet=$true
         }
     }
     process {
@@ -1293,7 +1445,7 @@ function New-CompanyUser {
                 do {
                     $Finished=$false
                     try {
-                        $M365License = Read-Host("Microsoft 365 License type:") -ErrorAction Stop
+                        $M365License = Read-Host("Office 365 License type") -ErrorAction Stop
                         $Finished =$true
                     }
                     catch [System.Management.Automation.ValidationMetadataException]{
@@ -1304,11 +1456,22 @@ function New-CompanyUser {
                         $Finished =$false
                     }
                 } until ($Finished -eq $true)
+                if (!(Test-UserContinue -Message 'Internet Access not granted. Press enter to confirm, or type any key (then press enter) to grant Internet Access')) {
+                    $null = $MemberOf.Add('Internet Access')
+                }
+                if ($M365License -eq 'E1' -or $M365License -eq 'E2'){
+                    Write-Verbose('License is: '+$M365License+' adding user to: "Email Only Users" ')
+                    $null = $MemberOf.Add('Email Only Users')
+                }
             }
             if (!$FileServerAccess) {
                 if (!(Test-UserContinue -Message 'File server access not granted. Press enter to confirm, or type any key (then press enter) to grant file access')) {
                     $fileserveraccess=$true
                     Write-Verbose('File server access set to True')
+                    if (!(Test-UserContinue -Message 'Remote access not granted. Press enter to confirm, or type any key (then press enter) to grant Remote access')) {
+                        $null = $MemberOf.Add('FortiToken')
+                        $null = $MemberOf.Add('Remote Access Users')
+                    }
                 }else{
                     $FileServerAccess=$false
                     Write-Verbose('File server access set to False')
@@ -1333,6 +1496,8 @@ function New-CompanyUser {
         #Convert the string variables to booleans
         [boolean]$DistributionList = [system.convert]::ToBoolean($DistributionList)
         [boolean]$FileServerAccess = [system.convert]::ToBoolean($FileServerAccess)
+        #Default Group to add all users
+        $null = $MemberOf.Add('All Users')
         #If FileServerAccess was set to True
         if ($FileServerAccess) {
             $null = $MemberOf.Add($ADA.$Branch.drive_group)
@@ -1418,6 +1583,7 @@ function New-CompanyUser {
                 $SplatActiveDirectory.Remove($Key)
                 Write-Verbose("Removed Empty Key: "+$Key)
             }
+
         }
         #endregion DataValidation
         #region DataConfirmation
@@ -1444,12 +1610,12 @@ function New-CompanyUser {
         }
         #endregion DataConfirmation
         #Check if the current user has permissions to make changes in AD
-        if (!(Assert-SufficientPermission -Server $DomainController -AdminGroups $AdminGroups) -and $Creds) {
+        if (!(Assert-ADPermission -Server $DomainController -AdminGroups $AdminGroups) -and $ADCredentials) {
             Write-Verbose('Adding provided credentials to Splats')
-            $SplatActiveDirectory.Add('Credential',$Creds)
-            $SplatADGetUser.Add('Credential',$Creds)
-            $SplatADGroups.Add('Credential',$Creds)
-            $SplatADUserSynced.Add('Credential',$Creds)
+            $SplatActiveDirectory.Add('Credential',$ADCredentials)
+            $SplatADGetUser.Add('Credential',$ADCredentials)
+            $SplatADGroups.Add('Credential',$ADCredentials)
+            $SplatADUserSynced.Add('Credential',$ADCredentials)
         }
         #All Variables have been collected and formatted how we wanted. Now lets make the account.
         if(!(Assert-EMSUExists -SamAccountName $SamAccountName -Server $EMSServer -Credential $EMSCredentials -WhatIf:$WhatIfPreference)){
@@ -1479,11 +1645,11 @@ function New-CompanyUser {
                             if($M365License){
                                 Write-Verbose('Trying to assign a '+$M365License+' License to ; '+$UserprincipalName)
                                 if( !(Set-AADULicense -UserPrincipalName $UserprincipalName -LicenseType $M365License -Whatif:$WhatIfPreference) -and $Interactive){
-                                    Test-UserContinue(-Message 'No Microsoft 365 License assigned. Press any key to continue.')
-                                }                                
+                                    Test-UserContinue -Message 'No Microsoft 365 License assigned. Press any key to continue.'
+                                }
                             }
                             Write-Verbose('Setting user MFA')                      
-                            Set-MSolUMFA -UserPrincipalName $UserprincipalName -StrongAuthenticationRequirements $StrongAuthenticationRequirements -Whatif:$WhatIfPreference
+                            Set-MSolUMFA -UserPrincipalName $UserprincipalName -StrongAuthenticationRequiremets $StrongAuthenticationRequiremets -Whatif:$WhatIfPreference
                         }
                 }else{
                     Write-Verbose('No license specified for user, nothing will be assigned')
