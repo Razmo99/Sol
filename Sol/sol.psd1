@@ -87,7 +87,8 @@ FunctionsToExport = @('Test-AADConnected',
 'Start-Logging',
 'Test-UserContinue',
 'Show-CompanyBranches',
-'New-CompanyUser')
+'New-CompanyUser',
+'Test-InteractivePrompts')
 
 # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
 CmdletsToExport = @()

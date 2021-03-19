@@ -469,7 +469,7 @@ function Show-CompanyBranches {
     Do{
         Write-Host('Branches')
         Write-Host('--------')
-        Write-Host(($Branches.selectNodes("//name") | Format-Table -HideTableHeaders | Out-String).Trim())
+        $Branches.ChildNodes | ForEach-Object {$_.Name} | Write-Host 
         $UserBranch = Read-Host -Prompt 'Enter User Branch?'
         if ($Branches.$UserBranch.name -contains $UserBranch) {
         }else {
@@ -685,9 +685,10 @@ function Assert-EMSPermission {
     try {
         if ($PSCmdlet.ShouldProcess($Server, "Testing New-PSSession on:")) {
             $Session = New-PSSession @SplatNewPSSession
-            $Session | Remove-PSSession     
+            $Session | Remove-PSSession
+            return $true
         }
-        return $true
+        if ($WhatIfPreference){return $true}
     }
     catch [System.Management.Automation.Remoting.PSRemotingTransportException]{
         if ($_.Exception.Message.contains("AuthZ-CmdletAccessDeniedException")) {
@@ -1256,11 +1257,13 @@ function New-CompanyUser {
         [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)][AllowEmptyString()][validateset('E1','E2','E3','')][string]$M365License,
         [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)][validateset('TRUE','FALSE')][string]$FileServerAccess,
         [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)][System.Collections.ArrayList]$MemberOf=@(),
+        [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)][System.Collections.ArrayList]$AutoMemberOf=@(),
+        [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)][System.Collections.ArrayList]$InteractivePrompts=@(),
         [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)][validateset('Enabled','Disabled','Enforced')][String]$StrongAuthenticationRequiremets,        
         [Parameter(Mandatory=$true)][String]$Domain,
         [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)][validateset('TRUE','FALSE')][string]$DistributionList='TRUE',
         [Parameter(Mandatory=$false)][PSCredential]$EMSCredentials,
-        [Parameter(Mandatory=$true)][String]$EMSServer,
+        [Parameter(Mandatory=$false)][String]$EMSServer,
         [Parameter(Mandatory=$false)][PSCredential]$ADCredentials,
         [Parameter(Mandatory=$false)][Boolean]$Interactive=$true,
         [Parameter(Mandatory=$false)][System.Collections.ArrayList]$AdminGroups,
@@ -1268,7 +1271,8 @@ function New-CompanyUser {
         [Parameter(Mandatory=$true)][String]$ADSyncServer,
         [Parameter(Mandatory=$true)][String]$EmailDomain,
         [Parameter(Mandatory=$true)][String]$FallbackUserOU,
-        [Parameter(Mandatory=$true)][String]$Company
+        [Parameter(Mandatory=$true)][String]$Company,
+        [Parameter(Mandatory=$false)][String][validateset('Hybrid','Cloud')]$M365DeploymentType='Hybrid'
 
     )
     begin {
@@ -1290,7 +1294,7 @@ function New-CompanyUser {
         #Create Quick call for XML Doc Path | Some stuff to handle if the file doesnt exist
         try {
             [xml]$XmlDocument = Get-Content -Path ($CurrentPath + '\BRANCHES.XML') -ErrorAction Stop
-            $ADA = $XmlDocument.$Company
+            $ADA = $XmlDocument.companies.$Company
         }
         catch [System.Management.Automation.ItemNotFoundException]{
             Write-Warning('Unable to Find BRANCHES.XML, no Branch information will be added')
@@ -1310,9 +1314,11 @@ function New-CompanyUser {
                 $ADCredSet=$true
                 }else{
                     #Check the provided credentials against other systems to cut down on amount of credentials that need to be entered in
-                    if (Assert-EMSPermission -Server $EMSServer -Credential $ADCredentials){
-                        $EMSCredentials = $ADCredentials
-                        $EMSCredSet=$True
+                    if($M365DeploymentType -eq 'Hybrid'){
+                        if (Assert-EMSPermission -Server $EMSServer -Credential $ADCredentials -and $M365DeploymentType -eq 'Hybrid'){
+                            $EMSCredentials = $ADCredentials
+                            $EMSCredSet=$True
+                        }
                     }
                     if (Assert-ADSyncPermission -Server $ADSyncServer -Credential $ADCredentials){
                         $ADSyncCredentials = $ADCredentials
@@ -1322,21 +1328,10 @@ function New-CompanyUser {
             }
         }
         #Detect if the current user or provided credentials are sufficient to get into the EMS Server
-        if (!(Assert-EMSPermission -Server $EMSServer) -and !$EMSCredentials) {
-            Write-Verbose('Requesting Exchange management credentials.')
-            if (!$WhatIfPreference) {
-                [pscredential]$EMSCredentials = Get-Credential -Message 'Exchange Management Credentials for '+$Server+' required'
-                if (!$EMSCredentials){
-                    Write-Error('No EMS credentials provided.')
-                    exit
-                }
-                $EMSCredSet=$true
-            }
-        }elseif($EMSCredentials -and !$EMSCredSet){
-            if (!(Assert-EMSPermission -Server $EMSServer -Credential $EMSCredentials)){
+        if($M365DeploymentType -eq 'Hybrid'){
+            if (!(Assert-EMSPermission -Server $EMSServer) -and !$EMSCredentials) {
                 Write-Verbose('Requesting Exchange management credentials.')
                 if (!$WhatIfPreference) {
-                    $EMSCredentials = $null
                     [pscredential]$EMSCredentials = Get-Credential -Message 'Exchange Management Credentials for '+$Server+' required'
                     if (!$EMSCredentials){
                         Write-Error('No EMS credentials provided.')
@@ -1344,8 +1339,21 @@ function New-CompanyUser {
                     }
                     $EMSCredSet=$true
                 }
+            }elseif($EMSCredentials -and !$EMSCredSet){
+                if (!(Assert-EMSPermission -Server $EMSServer -Credential $EMSCredentials)){
+                    Write-Verbose('Requesting Exchange management credentials.')
+                    if (!$WhatIfPreference) {
+                        $EMSCredentials = $null
+                        [pscredential]$EMSCredentials = Get-Credential -Message 'Exchange Management Credentials for '+$Server+' required'
+                        if (!$EMSCredentials){
+                            Write-Error('No EMS credentials provided.')
+                            exit
+                        }
+                        $EMSCredSet=$true
+                    }
+                }
             }
-        }     
+        }
         #Detect if the function is being used in a pipeline
         if ($PSCmdlet.MyInvocation.ExpectingInput -and !$ADSyncCredentials -and !$ADSyncCredSet) {
             Write-Verbose('Pipeline input detected, requesting credentials for: '+$ADSyncServer)
@@ -1456,22 +1464,11 @@ function New-CompanyUser {
                         $Finished =$false
                     }
                 } until ($Finished -eq $true)
-                if (!(Test-UserContinue -Message 'Internet Access not granted. Press enter to confirm, or type any key (then press enter) to grant Internet Access')) {
-                    $null = $MemberOf.Add('Internet Access')
-                }
-                if ($M365License -eq 'E1' -or $M365License -eq 'E2'){
-                    Write-Verbose('License is: '+$M365License+' adding user to: "Email Only Users" ')
-                    $null = $MemberOf.Add('Email Only Users')
-                }
             }
             if (!$FileServerAccess) {
                 if (!(Test-UserContinue -Message 'File server access not granted. Press enter to confirm, or type any key (then press enter) to grant file access')) {
                     $fileserveraccess=$true
                     Write-Verbose('File server access set to True')
-                    if (!(Test-UserContinue -Message 'Remote access not granted. Press enter to confirm, or type any key (then press enter) to grant Remote access')) {
-                        $null = $MemberOf.Add('FortiToken')
-                        $null = $MemberOf.Add('Remote Access Users')
-                    }
                 }else{
                     $FileServerAccess=$false
                     Write-Verbose('File server access set to False')
@@ -1513,6 +1510,13 @@ function New-CompanyUser {
             Write-Verbose('Alternate manager not specified, using branch default')
             $Manager = $ADA.$Branch.manager
         }
+        #If file server access isnt granted dont add the logon script
+        if (!$FileServerAccess){
+            $logonscript = $false
+        }elseif($FileServerAccess){
+            Write-Verbose('Adding login script from Selected Branch')
+            $logonscript = $ADA.$Branch.logonscript
+        }
         #Set variables for the Splat
         [string]$UserprincipalName = $SamAccountName + $EmailDomain
         #region Splatter
@@ -1532,7 +1536,37 @@ function New-CompanyUser {
             Whatif = $WhatIfPreference
         }
         #Set the AD Attributes for the new user
-        [HashTable]$SplatActiveDirectory = @{
+        #This splat is used when a cloud deployed is set
+        [HashTable]$SplatADNewUser = @{
+            Name = $DisplayName
+            AccountPassword = $Password
+            UserPrincipalName = $UserprincipalName
+            DisplayName = $DisplayName
+            GivenName = $Firstname
+            Surname = $Lastname
+            Path = $ADA.$Branch.ou
+            SamAccountName = $SamAccountName
+            Server=$DomainController
+            Whatif = $WhatIfPreference
+            Identity = $SamAccountName
+            Office = $ADA.$Branch.office
+            State = $ADA.$Branch.state
+            Company = $ADA.$Branch.company
+            Manager = $Manager
+            Department = $ADA.$Branch.department
+            City = $ADA.$Branch.city
+            Country = $ADA.$Branch.country
+            ScriptPath = $logonscript
+            PostalCode = $ADA.$Branch.post_code
+            POBox = $ADA.$Branch.po_box
+            StreetAddress = $ADA.$Branch.street
+            OfficePhone = $OfficePhone
+            MobilePhone = $MobilePhone
+            Title = $Title                
+        }
+        #Set the AD Attributes for the new user
+        #this splat isused when a Hybrid deployment is specified
+        [HashTable]$SplatADAttributes = @{
             server = $DomainController
             Identity = $SamAccountName
             Office = $ADA.$Branch.office
@@ -1542,7 +1576,7 @@ function New-CompanyUser {
             Department = $ADA.$Branch.department
             City = $ADA.$Branch.city
             Country = $ADA.$Branch.country
-            ScriptPath = $ADA.$Branch.logonscript
+            ScriptPath = $logonscript
             PostalCode = $ADA.$Branch.post_code
             POBox = $ADA.$Branch.po_box
             StreetAddress = $ADA.$Branch.street
@@ -1578,13 +1612,20 @@ function New-CompanyUser {
         }
         #We've got to remove any null or empty values from the hastable
         Write-Verbose("Cleaning AD splat of empty values")
-        foreach($Key in @($SplatActiveDirectory.Keys) ){
-            if (-not $SplatActiveDirectory[$Key]) {
-                $SplatActiveDirectory.Remove($Key)
-                Write-Verbose("Removed Empty Key: "+$Key)
+        foreach($Key in @($SplatADAttributes.Keys) ){
+            if (-not $SplatADAttributes[$Key]) {
+                $SplatADAttributes.Remove($Key)
+                Write-Verbose("SplatADAttributes: Removed Empty Key: "+$Key)
             }
 
         }
+        foreach($Key in @($SplatADNewUser.Keys) ){
+            if (-not $SplatADNewUser[$Key]) {
+                $SplatADNewUser.Remove($Key)
+                Write-Verbose("SplatADNewUser: Removed Empty Key: "+$Key)
+            }
+
+        }        
         #endregion DataValidation
         #region DataConfirmation
         #Chance to confirm some account details
@@ -1592,16 +1633,18 @@ function New-CompanyUser {
             Write-Verbose('------------------------------')
             Write-Verbose('Active Directory Details')
             Write-Verbose('------------------------------')
-            $SplatActiveDirectory | Format-table -Verbose
+            if($M365DeploymentType -eq 'Hybrid'){$SplatADAttributes | Format-table -Verbose}else{$SplatADNewUser | Format-table -Verbose}
             Write-Verbose ('------------------------------')
             Write-Verbose('AD Group Details')
             Write-Verbose('------------------------------')
             $MemberOf | Format-List -Verbose
             Write-Verbose('------------------------------')
-            Write-Verbose('Exchange Details')
-            Write-Verbose('------------------------------')
-            $SplatExchange | Format-table -Verbose
-            Write-Verbose('------------------------------')
+            if($M365DeploymentType -eq 'Hybrid'){
+                Write-Verbose('Exchange Details')
+                Write-Verbose('------------------------------')
+                $SplatExchange | Format-table -Verbose
+                Write-Verbose('------------------------------')
+            }
             if(!(Test-UserContinue -Message 'Above are the details for the user to be created, if the details are correct proceed otherwise cancel')){
                 Write-Verbose('User Cancelled Terminating')
                 Stop-Transcript
@@ -1612,50 +1655,99 @@ function New-CompanyUser {
         #Check if the current user has permissions to make changes in AD
         if (!(Assert-ADPermission -Server $DomainController -AdminGroups $AdminGroups) -and $ADCredentials) {
             Write-Verbose('Adding provided credentials to Splats')
-            $SplatActiveDirectory.Add('Credential',$ADCredentials)
+            $SplatADAttributes.Add('Credential',$ADCredentials)
             $SplatADGetUser.Add('Credential',$ADCredentials)
             $SplatADGroups.Add('Credential',$ADCredentials)
             $SplatADUserSynced.Add('Credential',$ADCredentials)
+            $SplatADNewUser.Add('Credential',$ADCredentials)
         }
         #All Variables have been collected and formatted how we wanted. Now lets make the account.
-        if(!(Assert-EMSUExists -SamAccountName $SamAccountName -Server $EMSServer -Credential $EMSCredentials -WhatIf:$WhatIfPreference)){
-            Write-Verbose($SamAccountName+' does not exists on EMS; proceeding')
-            if ($PSCmdlet.ShouldProcess($EMSServer, 'New-RemoteMailbox -Password "'+$SplatExchange.Password+'" -Name "'+$SplatExchange.Name+'" UserprincipalName "'+$SplatExchange.UserPrincipalName+'" Alias "'+$SplatExchange.Alias+'" DisplayName "'+$SplatExchange.DisplayName+'" Firstname "'+$SplatExchange.Firstname+'" Lastname "'+$SplatExchange.Lastname+'" OnPremisesOrganizationalUnit "'+$SplatExchange.OnPremisesOrganizationalUnit+'" SamAccountName "'+$SplatExchange.SamAccountName+'" Archive "'+$SplatExchange.Archive+'" DomainController "'+$SplatExchange.DomainController)) {
-                New-RemoteMailbox @SplatExchange -ErrorAction Stop
-            }
-            #Wait for the user to Sync then set user attributes
-            if ((Wait-ADUSynced @SplatADUserSynced) -or $WhatIfPreference) {
-                Write-Verbose('Found "'+$SamAccountName+'" in AD updating user Attributes')
-                if ($PSCmdlet.ShouldProcess($DomainController, 'Set-ADUser -Server "'+$SplatActiveDirectory.Server+'" -Identity "'+$SplatActiveDirectory.Identity+'" -Office "'+$SplatActiveDirectory.Offic+'" -State "'+$SplatActiveDirectory.State+'" -Company "'+$SplatActiveDirectory.Company+'" -Manager "'+$SplatActiveDirectory.Manager+'" -Department "'+$SplatActiveDirectory.Department+'" -City "'+$SplatActiveDirectory.City+'" -Country "'+$SplatActiveDirectory.Country+'" -ScriptPath "'+$SplatActiveDirectory.ScriptPath+'" -PostalCode "'+$SplatActiveDirectory.PostalCode+'" -POBox "'+$SplatActiveDirectory.POBox+'" -StreetAddress "'+$SplatActiveDirectory.StreetAddress+'" -OfficePhone "'+$SplatActiveDirectory.OfficePhone+'" -MobilePhone "'+$SplatActiveDirectory.MobilePhone+'" -Title "'+$SplatActiveDirectory.Title)) {                
-                Set-ADUser @SplatActiveDirectory
-                Get-ADUser @SplatADGetUser
+        if($M365DeploymentType -eq 'Hybrid'){
+            if(!(Assert-EMSUExists -SamAccountName $SamAccountName -Server $EMSServer -Credential $EMSCredentials -WhatIf:$WhatIfPreference)){
+                Write-Verbose('This user will be created using Microsoft 365 Hybrid deployment.')
+                Write-Verbose($SamAccountName+' does not exists on EMS; proceeding')
+                if ($PSCmdlet.ShouldProcess($EMSServer, 'New-RemoteMailbox -Password "'+$SplatExchange.Password+'" -Name "'+$SplatExchange.Name+'" UserprincipalName "'+$SplatExchange.UserPrincipalName+'" Alias "'+$SplatExchange.Alias+'" DisplayName "'+$SplatExchange.DisplayName+'" Firstname "'+$SplatExchange.Firstname+'" Lastname "'+$SplatExchange.Lastname+'" OnPremisesOrganizationalUnit "'+$SplatExchange.OnPremisesOrganizationalUnit+'" SamAccountName "'+$SplatExchange.SamAccountName+'" Archive "'+$SplatExchange.Archive+'" DomainController "'+$SplatExchange.DomainController)) {
+                    New-RemoteMailbox @SplatExchange -ErrorAction Stop
                 }
+                #Wait for the user to Sync then set user attributes
+                if ((Wait-ADUSynced @SplatADUserSynced) -or $WhatIfPreference) {
+                    Write-Verbose('Found "'+$SamAccountName+'" in AD updating user Attributes')
+                    if ($PSCmdlet.ShouldProcess($DomainController, 'Set-ADUser -Server "'+$SplatADAttributes.Server+'" -Identity "'+$SplatADAttributes.Identity+'" -Office "'+$SplatADAttributes.Offic+'" -State "'+$SplatADAttributes.State+'" -Company "'+$SplatADAttributes.Company+'" -Manager "'+$SplatADAttributes.Manager+'" -Department "'+$SplatADAttributes.Department+'" -City "'+$SplatADAttributes.City+'" -Country "'+$SplatADAttributes.Country+'" -ScriptPath "'+$SplatADAttributes.ScriptPath+'" -PostalCode "'+$SplatADAttributes.PostalCode+'" -POBox "'+$SplatADAttributes.POBox+'" -StreetAddress "'+$SplatADAttributes.StreetAddress+'" -OfficePhone "'+$SplatADAttributes.OfficePhone+'" -MobilePhone "'+$SplatADAttributes.MobilePhone+'" -Title "'+$SplatADAttributes.Title)) {                
+                    Set-ADUser @SplatADAttributes
+                    Get-ADUser @SplatADGetUser
+                    }
+                    #Add the user to specified groups
+                    if($MemberOf){
+                        Set-ADUGroups @SplatADGroups
+                    }else {
+                        Write-Verbose('No groups specified')
+                    }
+                }
+                #Start an Delta Sync on AzureAD Connect
+                $CurrentUser = (whoami /UPN)
+                if (!$CurrentUser.contains($EmailDomain)){
+                    Write-Verbose('RunAs User Email Domain does not contain: '+$EmailDomain)
+                    Write-Verbose('AzureAD Connection Credentials will need to be manually entered')
+                    Test-AADConnected -CredentialPrompt
+                }
+                Write-Verbose('Starting AzureAD Connect Sync')
+                if((Sync-Directories -Server $ADSyncServer -Credential $ADSyncCredentials -AzureActiveDirectory -ErrorAction Stop -Whatif:$WhatIfPreference) -or $WhatIfPreference){
+                    if((Wait-AADUSynced -UserPrincipalName $UserprincipalName -Whatif:$WhatIfPreference) -or $WhatIfPreference){
+                        if($M365License){
+                            Write-Verbose('Trying to assign a '+$M365License+' License to ; '+$UserprincipalName)
+                            if( !(Set-AADULicense -UserPrincipalName $UserprincipalName -LicenseType $M365License -Whatif:$WhatIfPreference) -and $Interactive){
+                                Test-UserContinue -Message 'No Microsoft 365 License assigned. Press any key to continue'
+                            }
+                        }
+                        Write-Verbose('Setting user MFA')                      
+                        Set-MSolUMFA -UserPrincipalName $UserprincipalName -StrongAuthenticationRequiremets $StrongAuthenticationRequiremets -Whatif:$WhatIfPreference
+                    }
+                }else{
+                    Write-Verbose('No license specified for user, nothing will be assigned')
+                }
+            }else{
+                Write-Warning($SamAccountName+' already exists on EMS; skipping')
+            }
+        }
+        if(!(Assert-ADUExists -SamAccountName $SamAccountName -Server $DomainController -Credential $EMSCredentials -WhatIf:$WhatIfPreference) -and ($M365DeploymentType -eq 'Cloud')){
+            Write-Verbose('This user will be created using Microsoft 365 Cloud deployment.')
+            Write-Verbose($SamAccountName+' does not exists on AD; proceeding')
+            if ($PSCmdlet.ShouldProcess($DomainController, 'New-ADuser -Password "'+$SplatExchange.Password+'" -Name "'+$SplatExchange.Name+'" UserprincipalName "'+$SplatExchange.UserPrincipalName+'" DisplayName "'+$SplatExchange.DisplayName+'" GivenName "'+$SplatExchange.GivenName+'" Surname "'+$SplatExchange.Surname+'" Path "'+$SplatExchange.Path+'" SamAccountName "'+$SplatExchange.SamAccountName+'" Server "'+$SplatExchange.Server+'Set-ADUser -Server "'+$SplatADNewUser.Server+'" -Identity "'+$SplatADNewUser.Identity+'" -Office "'+$SplatADNewUser.Offic+'" -State "'+$SplatADNewUser.State+'" -Company "'+$SplatADNewUser.Company+'" -Manager "'+$SplatADNewUser.Manager+'" -Department "'+$SplatADNewUser.Department+'" -City "'+$SplatADNewUser.City+'" -Country "'+$SplatADNewUser.Country+'" -ScriptPath "'+$SplatADNewUser.ScriptPath+'" -PostalCode "'+$SplatADNewUser.PostalCode+'" -POBox "'+$SplatADNewUser.POBox+'" -StreetAddress "'+$SplatADNewUser.StreetAddress+'" -OfficePhone "'+$SplatADNewUser.OfficePhone+'" -MobilePhone "'+$SplatADNewUser.MobilePhone+'" -Title "'+$SplatADNewUser.Title)) {
+                New-ADUser @SplatADNewUser -ErrorAction Stop
+                Get-ADUser @SplatADGetUser
+            }
+            #Wait for user to Sync to Active Directory
+            if ((Wait-ADUSynced @SplatADUserSynced) -or $WhatIfPreference) {
                 if($MemberOf){
                     Set-ADUGroups @SplatADGroups
                 }else {
                     Write-Verbose('No groups specified')
                 }
             }
-            #Add the user to specified groups
-
             #Start an Delta Sync on AzureAD Connect
+            $CurrentUser = (whoami /UPN)
+            if (!$CurrentUser.contains($EmailDomain)){
+                Write-Verbose('RunAs User Email Domain does not contain: '+$EmailDomain)
+                Write-Verbose('AzureAD Connection Credentials will need to be manually entered')
+                Test-AADConnected -CredentialPrompt
+            }
             Write-Verbose('Starting AzureAD Connect Sync')
-                    if((Sync-Directories -Server $ADSyncServer -Credential $ADSyncCredentials -AzureActiveDirectory -ErrorAction Stop -Whatif:$WhatIfPreference) -or $WhatIfPreference){
-                        if((Wait-AADUSynced -UserPrincipalName $UserprincipalName -Whatif:$WhatIfPreference) -or $WhatIfPreference){
-                            if($M365License){
-                                Write-Verbose('Trying to assign a '+$M365License+' License to ; '+$UserprincipalName)
-                                if( !(Set-AADULicense -UserPrincipalName $UserprincipalName -LicenseType $M365License -Whatif:$WhatIfPreference) -and $Interactive){
-                                    Test-UserContinue -Message 'No Microsoft 365 License assigned. Press any key to continue.'
-                                }
-                            }
-                            Write-Verbose('Setting user MFA')                      
-                            Set-MSolUMFA -UserPrincipalName $UserprincipalName -StrongAuthenticationRequiremets $StrongAuthenticationRequiremets -Whatif:$WhatIfPreference
+            if((Sync-Directories -Server $ADSyncServer -Credential $ADSyncCredentials -AzureActiveDirectory -ErrorAction Stop -Whatif:$WhatIfPreference) -or $WhatIfPreference){
+                if((Wait-AADUSynced -UserPrincipalName $UserprincipalName -Whatif:$WhatIfPreference) -or $WhatIfPreference){
+                    if($M365License){
+                        Write-Verbose('Trying to assign a '+$M365License+' License to ; '+$UserprincipalName)
+                        if( !(Set-AADULicense -UserPrincipalName $UserprincipalName -LicenseType $M365License -Whatif:$WhatIfPreference) -and $Interactive){
+                            Test-UserContinue -Message 'No Microsoft 365 License assigned. Press any key to continue'
                         }
-                }else{
-                    Write-Verbose('No license specified for user, nothing will be assigned')
+                    }
+                    Write-Verbose('Setting user MFA')                      
+                    Set-MSolUMFA -UserPrincipalName $UserprincipalName -StrongAuthenticationRequiremets $StrongAuthenticationRequiremets -Whatif:$WhatIfPreference
                 }
+            }else{
+                Write-Verbose('No license specified for user, nothing will be assigned')
+            }
         }else{
-            Write-Warning($SamAccountName+' already exists on EMS; skipping')
+            Write-Warning($SamAccountName+' already exists in AD; skipping')
         }
     }
     end {Stop-Transcript}
