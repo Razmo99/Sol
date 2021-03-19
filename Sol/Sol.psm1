@@ -1782,8 +1782,8 @@ function New-CompanyUser {
         [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)][AllowEmptyString()][validateset('E1','E2','E3','')][string]$M365License,
         [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)][validateset('TRUE','FALSE')][string]$FileServerAccess,
         [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)][System.Collections.ArrayList]$MemberOf=@(),
-        [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)][System.Collections.ArrayList]$AutoMemberOf=@(),
-        [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)][System.Collections.ArrayList]$InteractivePrompts=@(),
+        [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)][HashTable]$AutoMemberOf=@{},
+        [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)][HashTable]$InteractivePrompts=@{},
         [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)][validateset('Enabled','Disabled','Enforced')][String]$StrongAuthenticationRequiremets,        
         [Parameter(Mandatory=$true)][String]$Domain,
         [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)][validateset('TRUE','FALSE')][string]$DistributionList='TRUE',
@@ -2005,6 +2005,23 @@ function New-CompanyUser {
             }else {
                 $DistributionList=$true
             }
+            # Convert the string variables to booleans
+            [boolean]$DistributionList = [system.convert]::ToBoolean($DistributionList)
+            [boolean]$FileServerAccess = [system.convert]::ToBoolean($FileServerAccess)            
+            # Splat containing Parameters for Testing Interactive Prompts
+            $SplatTestInteractivePrompts=@{
+                FileServerAccess=$FileServerAccess
+                M365License=$M365License
+            }
+            # Conditions to add items to the splat depending on input
+            if($InteractivePrompts){$SplatTestInteractivePrompts.Add('InteractivePrompts',$InteractivePrompts)}
+            if($AutoMemberOf){$SplatTestInteractivePrompts.Add('AutoMemberOf',$AutoMemberOf)}
+            # Only Execute the Prompts if their is aleast one of the below
+            if($InteractivePrompts -or $AutoMemberOf){
+                # Store the results in the a variable
+                $ResultsIP = Test-InteractivePrompts @SplatTestInteractivePrompts
+                If($ResultsIP){$MemberOf.AddRange($ResultsIP)}
+            }
         }
         #Check we can get the branch name.
         if (!$ADA.$Branch.name) {
@@ -2013,13 +2030,8 @@ function New-CompanyUser {
         #Turn the MemberOf variable to an array
         if ($MemberOf -contains ',' -and $MemberOf) {
             Write-Verbose('User is a MemberOf multiple groups, parsing groups.')
-            [System.Collections.ArrayList]$MemberOf = $MemberOf.Split(',')
+            [System.Collections.ArrayList]$MemberOf = $MemberOf.Split(',')          
         }
-        #Convert the string variables to booleans
-        [boolean]$DistributionList = [system.convert]::ToBoolean($DistributionList)
-        [boolean]$FileServerAccess = [system.convert]::ToBoolean($FileServerAccess)
-        #Default Group to add all users
-        $null = $MemberOf.Add('All Users')
         #If FileServerAccess was set to True
         if ($FileServerAccess) {
             $null = $MemberOf.Add($ADA.$Branch.drive_group)
@@ -2042,6 +2054,7 @@ function New-CompanyUser {
             Write-Verbose('Adding login script from Selected Branch')
             $logonscript = $ADA.$Branch.logonscript
         }
+        $MemberOf = $MemberOf | Sort-Object -Property @{Expression={$_.Trim()}} -Unique
         #Set variables for the Splat
         [string]$UserprincipalName = $SamAccountName + $EmailDomain
         #region Splatter
@@ -2213,7 +2226,7 @@ function New-CompanyUser {
                 if (!$CurrentUser.contains($EmailDomain)){
                     Write-Verbose('RunAs User Email Domain does not contain: '+$EmailDomain)
                     Write-Verbose('AzureAD Connection Credentials will need to be manually entered')
-                    Test-AADConnected -CredentialPrompt
+                    Test-AADConnected -CredentialPrompt -WhatIf:$false
                 }
                 Write-Verbose('Starting AzureAD Connect Sync')
                 if((Sync-Directories -Server $ADSyncServer -Credential $ADSyncCredentials -AzureActiveDirectory -ErrorAction Stop -Whatif:$WhatIfPreference) -or $WhatIfPreference){
@@ -2254,7 +2267,7 @@ function New-CompanyUser {
             if (!$CurrentUser.contains($EmailDomain)){
                 Write-Verbose('RunAs User Email Domain does not contain: '+$EmailDomain)
                 Write-Verbose('AzureAD Connection Credentials will need to be manually entered')
-                Test-AADConnected -CredentialPrompt
+                Test-AADConnected -CredentialPrompt -whatif:$False
             }
             Write-Verbose('Starting AzureAD Connect Sync')
             if((Sync-Directories -Server $ADSyncServer -Credential $ADSyncCredentials -AzureActiveDirectory -ErrorAction Stop -Whatif:$WhatIfPreference) -or $WhatIfPreference){
