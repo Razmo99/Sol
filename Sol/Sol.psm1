@@ -149,6 +149,176 @@ function Test-EMSConnected {
     }
 }
 
+function Test-UserPrompt {
+    param (
+        [Parameter(Mandatory=$true)][String]$Message,
+        [Parameter(Mandatory=$false)][boolean]$Inverse=$false
+    )
+    # If prompt is inverse (!)bang it
+    if($Inverse){
+        $TestUser = !(Test-UserContinue -Message $Message)
+    # else normal
+    }else{
+        $TestUser = Test-UserContinue -Message $Message
+    }
+    return $TestUser      
+}
+
+function Test-Prompts {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)][HashTable]$Prompts
+    )
+    [HashTable]$Results=@{}
+    Write-Verbose('Processing prompts without Requirements')
+    # Iterate over the Prompts
+    foreach ($key in $Prompts.keys) {
+        $Prompt = $Prompts[$Key]
+        if(Test-UserPrompt -Message $Prompt.Message -Inverse:$Prompt.Inverse){
+            # stick the groups into out results object
+            [Void] $Results.Add($Key,$Prompts[$Key])
+        }
+    }
+    return $Results
+}
+
+function Test-PromptM365AndFileServerAccess {
+    <#
+    .SYNOPSIS
+    Test Prompts for M365 and File Server Access
+    
+    .DESCRIPTION
+    Removes prompts that require FileServerAccess or a specific M365 License
+    
+    .PARAMETER Prompts
+    System.HashTable - Contains prompt That have requirements for M365 License or FileServerAccess
+    
+    .PARAMETER FileServerAccess
+    System.Boolean - Has the user been assigned FileServerAccess.
+    Default is False
+
+    .PARAMETER M365License
+    System.String - Type of License the user has been assigned if any.
+    Default is ''
+    #>    
+    param (
+        [Parameter(Mandatory=$true)][HashTable]$Prompts,
+        [Parameter(Mandatory=$false)][boolean]$FileServerAccess=$false,
+        [Parameter(Mandatory=$false)][String]$M365License=''
+    )
+    Write-Verbose('Processing prompts without Requirements on other prompts')
+    [HashTable]$Results=@{}
+    # Iterate over all DPrompts with Requirements
+    foreach ($key in $Prompts.keys) {     
+        # Bool to tell if the Prompt should be displayed to the user
+        $CriterialMet = $true
+        # If the Prompt has FileServerAccess AND FileServerAccess is assigned to the user proceed
+        if(!$FileServerAccess){
+            # If promp FileServerAccess is False Criteria not met
+            if($Prompts.$key.Requirements.FileServerAccess -eq $true){
+                Write-Verbose($key+': Criterial Failed: '+'File Server Access')
+                $CriterialMet = $false
+            }
+        # If the Prompt has M365License AND user has M365License
+        }
+        if($Prompts.$key.Requirements.M365License){
+            # If the License is not within the M365 Array Criteria not met
+            if(($Prompts.$key.Requirements.M365License -notcontains $M365License) -and !($Prompts.$key.Requirements.M365License -contains 'Any')){
+                Write-Verbose($key+': Criterial Failed: '+'Microsoft 365 License')
+                $CriterialMet=$false
+            }       
+        } 
+        if($CriterialMet){
+            if(Test-UserPrompt -Message $Prompts.$Key.Message -Inverse:$Prompts.$Key.Inverse){
+                # stick the groups into out results object
+                [Void] $Results.Add($key,$Prompts.$Key)
+            }
+        }             
+    }
+    return $Results        
+}
+
+function Test-PromptsWRequsOTHPrompts {
+    <#
+    .SYNOPSIS
+    Test Prompts With Requirements On Other Prompts
+    
+    .DESCRIPTION
+    Removes prompts that require FileServerAccess or a specific M365 License
+    Removes Prompts that require other prompts but the prompt does not exist
+    
+    .PARAMETER Prompts
+    System.HashTable - Contains prompt That have requirements on other prompts
+    
+    .PARAMETER FileServerAccess
+    System.Boolean - Has the user been assigned FileServerAccess.
+    Default is False
+
+    .PARAMETER M365License
+    System.String - Type of License the user has been assigned if any.
+    Default is ''
+    
+    .PARAMETER ResultsWOReqs
+    System.HashTable - Contains prompt Results that do not have requirements
+    #>
+    param (
+        [Parameter(Mandatory=$true)][HashTable]$Prompts,
+        [Parameter(Mandatory=$false)][boolean]$FileServerAccess=$false,
+        [Parameter(Mandatory=$false)][String]$M365License='',
+        [Parameter(Mandatory=$true)][HashTable]$ResultsWOReqs
+    )
+    [HashTable]$Results=@{}
+    $MissingRequirements=New-Object System.Collections.Queue
+    # Iterate over all DPrompts with Dependancies
+    Write-Verbose('Processing prompts with requirements on other prompts')
+    foreach ($key in $Prompts.keys) {
+        # Bool to tell if the Prompt should be displayed to the user
+        $CriterialMet = $true
+        # If the Prompt has FileServerAccess AND FileServerAccess is assigned to the user proceed
+        if(!$FileServerAccess){
+            # If promp FileServerAccess is False Criteria not met
+            if($Prompts.$key.Requirements.FileServerAccess -eq $true){
+                Write-Verbose($key+': Criterial Failed | Missing File Server Access')
+                $CriterialMet = $false
+            }
+        # If the Prompt has M365License AND user has M365License
+        }
+        if($Prompts.$key.Requirements.M365License){
+            # If the License is not within the M365 Array Criteria not met
+            if(($Prompts.$key.Requirements.M365License -notcontains $M365License) -and !($Prompts.$key.Requirements.M365License -contains 'Any')){
+                Write-Verbose($key+': Criterial Failed | Missing Microsoft 365 License '+$Prompts.$key.Requirements.M365License)
+                $CriterialMet=$false
+            }       
+        } 
+        # If the prompts has requirements
+        if($Prompts.$Key.Requirements.Prompts){
+            # Foreach requirements
+            foreach($Req in $Prompts.$Key.Requirements.Prompts){
+                if($Prompts.Keys -notcontains $Req){
+                    $MissingRequirements.Enqueue($Req)
+                }
+            }
+            While($MissingRequirements -gt 0){
+                $CurrentReq = $MissingRequirements.Dequeue()
+                if($ResultsWOReqs.keys -contains $CurrentReq){
+                    Write-Verbose($key + ': Found Requirement "' + $CurrentReq+'"')
+                    $NewReqs = New-Object System.Collections.ArrayList(,$Prompts.$Key.Requirements.Prompts)
+                    $NewReqs.remove($CurrentReq)
+                    $Prompts.$Key.Requirements.Prompts = $NewReqs
+                }else{
+                    Write-Verbose($Key+': Criterial Failed | Missing Requirement: '+$CurrentReq)
+                    $CriterialMet=$false
+                }
+            }
+        }
+        if($CriterialMet){
+            Write-Verbose($Key+': Criteria Met')
+            [void] $Results.Add($Key,$Prompts[$Key])
+        }
+    }
+    return $Results 
+}
+
 function Set-MSolUMFA{
     <#
     .SYNOPSIS
@@ -459,6 +629,252 @@ Function Get-AADULicense{
         #>
     }
     End{}
+}
+
+function Get-ClonedObject {
+    
+    param($DeepCopyObject)
+    $memStream = new-object IO.MemoryStream
+    $formatter = new-object Runtime.Serialization.Formatters.Binary.BinaryFormatter
+    $formatter.Serialize($memStream,$DeepCopyObject)
+    $memStream.Position=0
+    $formatter.Deserialize($memStream)
+}
+
+function Get-TopologicalSort {
+    # Function from https://stackoverflow.com/questions/8982782/does-anyone-have-a-dependency-graph-and-topological-sorting-code-snippet-for-pow
+    param(
+        [Parameter(Mandatory = $true, Position = 0)]
+        [hashtable] $edgeList
+    )
+
+    # Make sure we can use HashSet
+    Add-Type -AssemblyName System.Core
+
+    # Clone it so as to not alter original
+    $currentEdgeList = [hashtable] (Get-ClonedObject $edgeList)
+
+    # algorithm from http://en.wikipedia.org/wiki/Topological_sorting#Algorithms
+    $topologicallySortedElements = New-Object System.Collections.ArrayList
+    $setOfAllNodesWithNoIncomingEdges = New-Object System.Collections.Queue
+
+    $fasterEdgeList = @{}
+
+    # Keep track of all nodes in case they put it in as an edge destination but not source
+    $allNodes = New-Object -TypeName System.Collections.Generic.HashSet[object] -ArgumentList (,[object[]] $currentEdgeList.Keys)
+    $MissingSourceNodes=New-Object System.Collections.Queue
+    # Iterate over all Keys in Edge List
+
+    function Assert-Nodes {
+        foreach($currentNode in $currentEdgeList.Keys) {
+            $currentDestinationNodes = [array] $currentEdgeList[$currentNode]
+            # If the current node's array is empty, meaning it has no incoming edges
+            if($currentDestinationNodes.Length -eq 0) {
+                $setOfAllNodesWithNoIncomingEdges.Enqueue($currentNode)
+            }
+            # Iterate over nodes and make sure it exists in all nodes otherwise enqueue to remove it.
+            foreach($currentDestinationNode in $currentDestinationNodes) {
+                if(!$allNodes.Contains($currentDestinationNode)) {
+                if($currentEdgeList.ContainsKey($currentDestinationNode)){
+                    [void] $allNodes.add($currentDestinationNode)
+                }else{
+                $MissingSourceNodes.Enqueue($currentNode)
+                Write-Verbose($CurrentNode+': Criteria Not Met | Destination Node Missing for: '+$currentDestinationNode)
+                }
+                }
+            }
+
+            # Take this time to convert them to a HashSet for faster operation
+            $currentDestinationNodes = New-Object -TypeName System.Collections.Generic.HashSet[object] -ArgumentList (,[object[]] $currentDestinationNodes )
+            [void] $fasterEdgeList.Add($currentNode, $currentDestinationNodes)
+        }
+    }
+    Assert-Nodes
+    While ($MissingSourceNodes.count -gt 0){
+    # This is so nasty
+    $currentMissingNode = $MissingSourceNodes.Dequeue()
+    $currentEdgeList.Remove($currentMissingNode)
+    $allNodes.Clear()
+    $setOfAllNodesWithNoIncomingEdges.Clear()
+    $fasterEdgeList.Clear()
+    Assert-Nodes
+    }
+
+    $currentEdgeList = $fasterEdgeList
+
+    while($setOfAllNodesWithNoIncomingEdges.Count -gt 0) {        
+        $currentNode = $setOfAllNodesWithNoIncomingEdges.Dequeue()
+        [void] $currentEdgeList.Remove($currentNode)
+        [void] $topologicallySortedElements.Add($currentNode)
+
+        foreach($currentEdgeSourceNode in $currentEdgeList.Keys) {
+            $currentNodeDestinations = $currentEdgeList[$currentEdgeSourceNode]
+            if($currentNodeDestinations.Contains($currentNode)) {
+                [void] $currentNodeDestinations.Remove($currentNode)
+
+                if($currentNodeDestinations.Count -eq 0) {
+                    [void] $setOfAllNodesWithNoIncomingEdges.Enqueue($currentEdgeSourceNode)
+                }                
+            }
+        }
+  }
+
+  if($currentEdgeList.Count -gt 0) {
+      throw "Graph has at least one cycle!"
+  }
+
+  return $topologicallySortedElements
+}
+
+function Convert-InteractivePromptsForTopologicalSort{
+    <#
+    .SYNOPSIS
+    Converts Promtps to a format that is accepeted by the Get-TopologicalSort function
+    .PARAMETER Prompts
+    System.HashTable - Prompts to be converted
+    #>
+    param(
+        [Parameter(Mandatory=$true)][HashTable]$Prompts
+    )
+    [HashTable]$Results=@{}
+
+    foreach ($InteractivePrompt in $Prompts.GetEnumerator()) {
+        if($InteractivePrompt.value.Requirements.Prompts){
+            $Results[$InteractivePrompt.Name]=$InteractivePrompt.value.Requirements.Prompts
+        }else{
+            $Results[$InteractivePrompt.Name]=@()
+        }
+    }
+    return $Results
+}
+function Resolve-Prompts {
+    <#
+    .SYNOPSIS
+    Resolves the provided prompts using Topological sorting till completion
+    .DESCRIPTION
+    Passes inputted prompts to the user to get answers.
+    Then re calculates the topological sorting based off the answers till all prompts are exhausted
+    
+    .PARAMETER Prompts
+    System.Hashtable - Prompts that have been converted for Topological Sorting
+    
+    .PARAMETER OriginalPrompts
+    System.Hashtable - Unmodified Original Prompts with all metadata
+    #>
+    [CmdletBinding()]param(
+
+        [parameter(Mandatory=$true)][HashTable]$Prompts,
+        [parameter(Mandatory=$true)][HashTable]$OriginalPrompts
+    )
+    # Clone the prompts as to not modify the source
+    $currentPrompts = [HashTable] (Get-ClonedObject $Prompts)
+    # This is a queue so that as answers are received the currentPrompts can be updated and then reproccessed
+    $PromptsQueue = New-Object System.Collections.Queue
+    # Kick it all off by Enqueueing the current prompts
+    $PromptsQueue.Enqueue((Get-TopologicalSort $currentPrompts))
+    # This Array contains the names of prompts that returned true
+    [HashTable]$PromptAnswers = @{}
+    # Primary While Loop keep Iterating aslong as the queue is not empty.
+    While($PromptsQueue.Count -gt 0){
+        # Dequeue The current Prompts
+        $PromptsDequeue = $PromptsQueue.Dequeue()
+        # Iterate over the prompts to be tested
+        Foreach($Key in $PromptsDequeue){
+            # If the Prompt has not been answered
+            if ($PromptAnswers.keys -notcontains $Key){
+                # Test the User
+                $TestUser = Test-UserPrompt -Message $OriginalPrompts.$Key.message -Inverse:$OriginalPrompts.$Key.inverse
+                if ($TestUser){
+                    # If the prompt is answered true add the prompt to Answers
+                    [void ]$PromptAnswers.Add($key,$OriginalPrompts.$Key)
+                }else{
+                    # If the prompt is answered false remove the prompt in question from the current prompts.
+                    $currentPrompts.Remove($Key)
+                    # Re que the current Prompts for another round
+                    $PromptsQueue.Enqueue((Get-TopologicalSort $currentPrompts))
+                    # Break the loop and reset it
+                    break
+                }
+            }
+        }
+    }
+    return $PromptAnswers
+}
+function Resolve-AutoMemberOf{
+    <#
+    .SYNOPSIS
+    Resolves the requirements of non-prompting MemberOf entries
+    
+    .DESCRIPTION
+    Iterates over the AutoMemberOf Parameter. If any requirements are present it checks them against the other inputed parameters. 
+    If the AutoMemberOf Item requires another prompt a key lookup is performed on the "InteractivePromptAnswers" parameter.
+    
+    .EXAMPLE
+    Resolve-AutoMemberOf -FileServerAccess:$False -M365License 'E1' -AutoMemberOf @{'Email'=@{MemberOf=@('Email');Requirements=@{Prompts=@('EmailAccess');FileServerAccess=$True}}} -InteractivePromptAnswers @{'EmailAccess'=@{MemberOf=@('testGroup')}}
+    .PARAMETER InteractivePromptAnswer
+        System.HashTable - Contains all the Answers to the Interactive Prompts preseneted to the user.
+        Used to resolve requirements "AutoMemberOf" may have.
+    .PARAMETER AutoMemberOf
+        System.HashTable - Contains all No Prompting Groups to add the user to with conditions.
+    .PARAMETER FileServerAccess
+        System.Boolean - Has the user been assigned FileServerAccess.
+        Default is False
+    .PARAMETER M365License
+        System.String - Type of License the user has been assigned if any.
+        Default is ''
+    .OUTPUTS
+        System.HashTable - Contains Entires from AutoMemberOf that have met requirements
+    #>
+    [CmdletBinding()]param(
+        [parameter(Mandatory=$true)][HashTable]$InteractivePromptAnswers,
+        [Parameter(Mandatory=$true)][HashTable]$AutoMemberOf,
+        [Parameter(Mandatory=$false)][boolean]$FileServerAccess=$false,
+        [Parameter(Mandatory=$false)][String]$M365License=''
+    )
+    [HashTable]$Results=@{}
+    Write-Verbose('Processing AutoMemberOf entries')
+    # Iterate over all AutoMember Items
+    foreach ($key in $AutoMemberOf.keys) {
+        # If this item doesn have requirements add it to the results
+        if(!$AutoMemberOf.$key.Requirements){
+            Write-Verbose($key+': Criteria Met')
+            [void] $Results.Add($key,$AutoMemberOf[$Key])
+        }elseif($AutoMemberOf.$key.Requirements){
+            $CriterialMet=$true
+            if(!$FileServerAccess){
+                # If item FileServerAccess is False Criteria not met
+                if($AutoMemberOf.$key.Requirements.FileServerAccess -eq $true){
+                    Write-Verbose($key+': Criterial Failed | File Server Access')
+                    $CriterialMet = $false
+                }
+            # If the item has M365License AND user has M365License
+            }
+            if($AutoMemberOf.$key.Requirements.M365License){
+                # If the License is not within the M365 Array Criteria not met
+                if(($AutoMemberOf.$key.Requirements.M365License -notcontains $M365License) -and !($AutoMemberOf.$key.Requirements.M365License -contains 'Any')){
+                    Write-Verbose($key+': Criterial Failed | Microsoft 365 License')
+                    $CriterialMet=$false
+                }       
+            }
+            # Does this item depend on other prompts          
+            if($AutoMemberOf.$key.Requirements.prompts){
+                # Iterate over each prompt it depends on
+                foreach ($req in $AutoMemberOf.$key.Requirements.prompts) {
+                    # If the Interactive Prompts does not contain this item Criteria not met
+                    if($InteractivePromptAnswers.keys -notcontains $req){
+                        Write-Verbose($key+': Criterial Failed | Missing req: '+$req)
+                        $CriterialMet=$false                        
+                    }
+                }                    
+            }
+            # Add the item to the results to be returned
+            if($CriterialMet){
+                Write-Verbose($key+': Criteria Met')
+                [void] $Results.Add($key,$AutoMemberOf[$Key])
+            }
+        }
+    }
+    return $Results 
 }
 
 function Show-CompanyBranches {
@@ -1240,6 +1656,115 @@ function Start-Logging{
     #endregion Logging Variables
 }
 
+function Test-InteractivePrompts {
+    <#
+    .SYNOPSIS
+    Presents the inputted prompts to the use.
+    
+    .DESCRIPTION
+    Presents Interactive prompts in a Topologicaly sorted order based on each prompts unique requirements
+    
+    .PARAMETER InteractivePrompts
+    System.HashTable - Contains all Interactive Prompts to present to the user for Answers
+    
+    .PARAMETER AutoMemberOf
+    System.HashTable - Contains all No Prompting Groups to add the user to with conditions.
+    
+    .PARAMETER FileServerAccess
+    System.Boolean - Has the user been assigned FileServerAccess.
+    Default is False
+
+    .PARAMETER M365License
+    System.String - Type of License the user has been assigned if any.
+    Default is ''
+    #>
+    [CmdletBinding()]param(
+        [parameter(Mandatory=$true)][HashTable]$InteractivePrompts,
+        [Parameter(Mandatory=$false)][HashTable]$AutoMemberOf=@{},
+        [Parameter(Mandatory=$false)][boolean]$FileServerAccess=$false,
+        [Parameter(Mandatory=$false)][String]$M365License=''   
+    )
+    # Prompts without Requirements
+    [HashTable]$PWOReqs=@{}
+    $InteractivePrompts.keys | ForEach-Object {if($InteractivePrompts.$_.Requirements -eq $null){$PWOReqs[$_]=$InteractivePrompts[$_]}}
+    # Prompts with Requirements and without Requirements on other Prompts
+    [HashTable]$PWReqsWOReqsOTHP=@{}
+    $InteractivePrompts.keys | ForEach-Object {if(($InteractivePrompts.$_.Requirements -ne $null) -and ($InteractivePrompts.$_.Requirements.Prompts -eq $null)){$PWReqsWOReqsOTHP[$_]=$InteractivePrompts[$_]}}
+    # Prompts with Requirements and with Requirements on other Prompts
+    [HashTable]$PWReqsWReqsOTHP=@{}
+    $InteractivePrompts.keys | ForEach-Object {if(($InteractivePrompts.$_.Requirements -ne $null) -and ($InteractivePrompts.$_.Requirements.Prompts -ne $null)){$PWReqsWReqsOTHP[$_]=$InteractivePrompts[$_]}}
+
+    # RESULTS
+    # Results With Requirements
+    [HashTable]$ResultsWOReqs=@{}
+    # Results With Requirements On Other Prompts
+    [HashTable]$ResultsWReqsWReqsOTHP=@{}
+    # Combination of the Above Results
+    [HashTable]$CombinedResults=@{}
+    # The Final Results that will be returned
+    [System.Collections.ArrayList]$Results=@()
+    
+    # If Prompts without Requirements process them.
+    if ($PWOReqs){
+        $Test_PWOReqs=Test-Prompts -Prompts $PWOReqs
+        if($Test_PWOReqs){
+            # Add any results to the result variables
+            $Test_PWOReqs.GetEnumerator() | ForEach-Object {$ResultsWOReqs.Add($_.key,$_.Value)}
+        }
+    }
+    # If Prompts with Requirements and without Requirements on other Prompts exist lets process them.
+    if($PWReqsWOReqsOTHP){
+        $Test_PWReqsWOReqsOTHP=Test-PromptM365AndFileServerAccess -Prompts $PWReqsWOReqsOTHP -M365License $M365License -FileServerAccess $FileServerAccess
+        if($Test_PWReqsWOReqsOTHP){
+            # Add any results to the result variables
+            $Test_PWReqsWOReqsOTHP.GetEnumerator() | ForEach-Object {$ResultsWOReqs.Add($_.key,$_.Value)}
+        }
+    }
+    # Prompts with Requirements and with Requirements on other Prompts exist lets process them.
+    if($PWReqsWReqsOTHP){
+        $Test_PWReqsWReqsOTHP=Test-PromptsWRequsOTHPrompts -prompts $PWReqsWReqsOTHP -FileServerAccess $FileServerAccess -M365License $M365License -ResultsWOReqs $ResultsWOReqs
+        if($Test_PWReqsWReqsOTHP){
+            # Convert any results for Topological sorting
+            $Convert_Prompts=Convert-InteractivePromptsForTopologicalSort $Test_PWReqsWReqsOTHP
+            # Topologicaly sort and resolve the prompts
+            $Resolve_PWReqsWReqsOTHP=Resolve-Prompts -Prompts $Convert_Prompts -OriginalPrompts $InteractivePrompts
+            if ($Resolve_PWReqsWReqsOTHP) {
+                # Add any results to the result variables
+                $Resolve_PWReqsWReqsOTHP.GetEnumerator() | ForEach-Object {$ResultsWReqsWReqsOTHP.Add($_.key,$_.Value)}
+            }
+        }
+    }
+    # Combine ant results into one Variable
+    $ResultsWOReqs.GetEnumerator() | ForEach-Object {$CombinedResults.Add($_.key,$_.Value)}
+    $ResultsWReqsWReqsOTHP.GetEnumerator() | ForEach-Object {$CombinedResults.Add($_.key,$_.Value)}
+    
+    # Iterate over all results
+    foreach ($CR in $CombinedResults.keys) {
+        # Add each Group to the results variable, if it is not already present
+        foreach ($Group in $CombinedResults.$CR.MemberOf) {
+            If($Results -notcontains $Group){
+                [void] $Results.Add($Group)
+            }
+        }
+    }
+
+    # If any AutoMember of provided resolve them
+    if($AutoMemberOf){
+        $Resolve_AutoMemberOf=Resolve-AutoMemberOf -InteractivePromptAnswers $CombinedResults -AutoMemberOf $AutoMemberOf -M365License $M365License -FileServerAccess:$FileServerAccess
+        If($Resolve_AutoMemberOf){
+            # Iterate over all results
+            foreach ($RAMO in $Resolve_AutoMemberOf.keys) {
+                # Add each Group to the results variable, if it is not already present
+                foreach ($Group in $Resolve_AutoMemberOf.$RAMO.MemberOf) {
+                    If($Results -notcontains $Group){
+                        [void] $Results.Add($Group)
+                    }
+                }
+            }          
+        }
+    }
+    return $Results
+}
 function New-CompanyUser {
     #Requires  -module ActiveDirectory
     #Requires  -module AzureAD
