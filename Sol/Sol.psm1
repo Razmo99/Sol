@@ -1803,7 +1803,7 @@ function New-CompanyUser {
     begin {
         $CurrentPath = Split-Path -Path $PSCmdlet.MyInvocation.PSCommandPath -Parent
         Write-Verbose('Working Directory is:'+$CurrentPath)
-        #Start Logging 
+        #Start Logging
         if ($PSCmdlet.MyInvocation.ExpectingInput){
         Start-Logging -Path $CurrentPath -Name $Domain
         }
@@ -1825,7 +1825,6 @@ function New-CompanyUser {
             Write-Warning('Unable to Find BRANCHES.XML, no Branch information will be added')
         }
         #Var to know if a EMS Credential has been set and is a known good
-        $ADCredSet=$true
         $EMSCredSet=$false
         $ADSyncCredSet=$false
         #Check if the current user has permissions to make changes in AD
@@ -1836,7 +1835,6 @@ function New-CompanyUser {
                 if(!$ADCredentials){
                     Write-Error('No AD credentials provided.')
                     exit
-                $ADCredSet=$true
                 }else{
                     #Check the provided credentials against other systems to cut down on amount of credentials that need to be entered in
                     if($M365DeploymentType -eq 'Hybrid'){
@@ -2200,6 +2198,7 @@ function New-CompanyUser {
             $SplatADNewUser.Add('Credential',$ADCredentials)
         }
         #All Variables have been collected and formatted how we wanted. Now lets make the account.
+        #region Hybrid
         if($M365DeploymentType -eq 'Hybrid'){
             if(!(Assert-EMSUExists -SamAccountName $SamAccountName -Server $EMSServer -Credential $EMSCredentials -WhatIf:$WhatIfPreference)){
                 Write-Verbose('This user will be created using Microsoft 365 Hybrid deployment.')
@@ -2247,6 +2246,8 @@ function New-CompanyUser {
                 Write-Warning($SamAccountName+' already exists on EMS; skipping')
             }
         }
+        #endregion Hybrid
+        #Region Cloud
         if(!(Assert-ADUExists -SamAccountName $SamAccountName -Server $DomainController -Credential $EMSCredentials -WhatIf:$WhatIfPreference) -and ($M365DeploymentType -eq 'Cloud')){
             Write-Verbose('This user will be created using Microsoft 365 Cloud deployment.')
             Write-Verbose($SamAccountName+' does not exists on AD; proceeding')
@@ -2287,6 +2288,8 @@ function New-CompanyUser {
         }else{
             Write-Warning($SamAccountName+' already exists in AD; skipping')
         }
+        #endregion Cloud
     }
+    
     end {Stop-Transcript}
 }
