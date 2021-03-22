@@ -2234,7 +2234,9 @@ function New-CompanyUser {
                         if($M365License){
                             Write-Verbose('Trying to assign a '+$M365License+' License to ; '+$UserprincipalName)
                             if( !(Set-AADULicense -UserPrincipalName $UserprincipalName -LicenseType $M365License -Whatif:$WhatIfPreference) -and $Interactive){
-                                Test-UserContinue -Message 'No Microsoft 365 License assigned. Press any key to continue'
+                                if(!$WhatIfPreference){
+                                    Test-UserContinue -Message 'No Microsoft 365 License assigned. Press any key to continue'
+                                }
                             }
                         }
                         Write-Verbose('Setting user MFA')                      
@@ -2277,7 +2279,9 @@ function New-CompanyUser {
                     if($M365License){
                         Write-Verbose('Trying to assign a '+$M365License+' License to ; '+$UserprincipalName)
                         if( !(Set-AADULicense -UserPrincipalName $UserprincipalName -LicenseType $M365License -Whatif:$WhatIfPreference) -and $Interactive){
-                            Test-UserContinue -Message 'No Microsoft 365 License assigned. Press any key to continue'
+                            if(!$WhatIfPreference){
+                                Test-UserContinue -Message 'No Microsoft 365 License assigned. Press any key to continue'
+                            }
                         }
                     }
                     Write-Verbose('Setting user MFA')                      
