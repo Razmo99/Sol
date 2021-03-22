@@ -1680,7 +1680,7 @@ function Test-InteractivePrompts {
     #>
     [CmdletBinding()]param(
         [parameter(Mandatory=$true)][HashTable]$InteractivePrompts,
-        [Parameter(Mandatory=$false)][HashTable]$AutoMemberOf=@{},
+        [Parameter(Mandatory=$false)][HashTable]$AutoMemberOf,
         [Parameter(Mandatory=$false)][boolean]$FileServerAccess=$false,
         [Parameter(Mandatory=$false)][String]$M365License=''   
     )
@@ -1734,10 +1734,9 @@ function Test-InteractivePrompts {
             }
         }
     }
-    # Combine ant results into one Variable
+    # Combine any results into one Variable
     $ResultsWOReqs.GetEnumerator() | ForEach-Object {$CombinedResults.Add($_.key,$_.Value)}
     $ResultsWReqsWReqsOTHP.GetEnumerator() | ForEach-Object {$CombinedResults.Add($_.key,$_.Value)}
-    
     # Iterate over all results
     foreach ($CR in $CombinedResults.keys) {
         # Add each Group to the results variable, if it is not already present
@@ -2017,8 +2016,10 @@ function New-CompanyUser {
             # Only Execute the Prompts if their is aleast one of the below
             if($InteractivePrompts -or $AutoMemberOf){
                 # Store the results in the a variable
-                $ResultsIP = Test-InteractivePrompts @SplatTestInteractivePrompts
-                If($ResultsIP){$MemberOf.AddRange($ResultsIP)}
+                [Array]$ResultsIP = @(Test-InteractivePrompts @SplatTestInteractivePrompts | Where-Object {$_})
+                If($ResultsIP){
+                    $MemberOf.AddRange($ResultsIP)
+                }
             }
         }
         #Check we can get the branch name.
