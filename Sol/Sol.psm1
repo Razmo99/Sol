@@ -1095,7 +1095,7 @@ function Assert-EMSPermission {
     }
     #Add Credentials if presented
     if ($Credential) {
-        Write-Verbose('Credentials provided')
+        Write-Verbose('Exchange Management Credentials provided')
         $SplatNewPSSession.Add('Credential',$Credential)
     }    
     try {
@@ -1144,24 +1144,37 @@ function Assert-ADSyncPermission{
     }
     #Add Credentials if presented
     if ($Credential) {
-        Write-Verbose('Credentials provided')
+        Write-Verbose('ADSync Credentials provided')
         $SplatNewPSSession.Add('Credential',$Credential)
     }
+    $Result=$true
     try {
         $Session = New-PSSession @SplatNewPSSession
         $Session | Remove-PSSession
-        return $true
     }
     catch [System.Management.Automation.ErrorRecord]{
         if ($_.Exception.Message.contains('Access is denied')){
-            return $false
+            $Result = $False
         }else{
             Write-Error($_.Exception.Message)
         }
     }
     catch{
-        Write-Error($_.Exception.Message)
-    } 
+        if($_.Exception.Message.Contains('The user name or password is incorrect.')){
+            Write-Verbose('Incorrect Username or password.')
+            $Result = $False
+        }elseif($_.Exception.Message.Contains('Access is denied.')){
+            Write-Verbose('ADSync: The provided credentials are insufficient.')
+            $Result = $False
+        }else{
+            $Result = $False
+            Write-Error($_.Exception.Message)
+        }
+    }
+    if($Result){
+        Write-verbose('ADSync Credentials have sufficient permissions.')
+    }
+    return $Result
 }
 
 function Assert-ADPermission {
@@ -1186,40 +1199,55 @@ function Assert-ADPermission {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param (
         [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)][string]$Server,
-        [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)][array]$AdminGroups
+        [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)][array]$AdminGroups,
+        [Parameter(Mandatory=$false)][PSCredential]$Credential,
+        [Parameter(Mandatory=$false)][String]$SamAccountName
+
     )
-    $SamAccountName = (whoami).split('\')
-    $SplatGetADPrince =@{
-        Identity = $SamAccountName[1]
+
+    $whoami = (whoami).split('\')
+
+    [HashTable]$SplatGetADPrince =@{
+        Identity = $whoami[1]
         Server = $Server
         ErrorAction = 'stop'
     }
-    if ($PSCmdlet.ShouldProcess($SamAccountName, "Compare-Object"+$AdminGroups)) {
+
+    if($Credential){$SplatGetADPrince.Add('Credential',$Credential)}
+    if($SamAccountName){$SplatGetADPrince.Identity = $SamAccountName}
+
+    if ($PSCmdlet.ShouldProcess($SamAccountName, 'Compare-Object "'+$AdminGroups+'"')) {
         try {
             #Get the groups that the current user is a member of
-            $MemberOf = Get-ADPrincipalGroupMembership @SplatGetADPrince  | Select-Object SamAccountName
+            $MemberOf = Get-ADPrincipalGroupMembership @SplatGetADPrince | Select-Object SamAccountName
             #Compare the groups agains the provided admin groups
             $ComparedResults = Compare-Object -ReferenceObject $AdminGroups -DifferenceObject $MemberOf.samaccountname -IncludeEqual
             #Check each result for a match
             foreach($Result in $ComparedResults){
                 # if a match is found return true and break the loop
                 if ($Result.SideIndicator -eq "==") {
-                    Write-Verbose('User has sufficient perms continuing')
+                    Write-Verbose('"'+$SplatGetADPrince.Identity+'" has sufficient Active Directory permissions.')
                     return $true
                     break
                 }
             }
         }catch [Microsoft.ActiveDirectory.Management.ADException]{
             #Evidently the user doesnt have access to AD, as they are unable to get what groups they are a memeber of
-            Write-Verbose('User has insufficient perms continuing')
+            Write-Verbose($_.Exception.message)
+            Write-Verbose('"'+$SplatGetADPrince.Identity+'" has insufficient Active Directory permissions.')
+            return $false
+        }catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException]{
+            Write-Verbose('Failed to find "'+$SplatGetADPrince.Identity+'" on "'+$Server+'"')
+            return $false
+        }catch [System.Security.Authentication.AuthenticationException]{
+            Write-Verbose($Server+' has rejected the client credentials.')
             return $false
         }catch{
-            #Just a catch in the event of something unexpect happens
-            Write-Error($_.Exception.Message)
+            Write-Error($_.Exception.message)
         }
         # If the foreach loop doesnt return/break the function return false as no match was found
+        Write-Verbose('"'+$SplatGetADPrince.Identity+'" has insufficient Active Directory permissions.')
         return $false
-        Write-Verbose('User has insufficient perms continuing')
     }
 }
 
@@ -1824,20 +1852,31 @@ function New-CompanyUser {
             Write-Warning('Unable to Find BRANCHES.XML, no Branch information will be added')
         }
         #Var to know if a EMS Credential has been set and is a known good
+        $ADCredSet=$false
         $EMSCredSet=$false
         $ADSyncCredSet=$false
         #Check if the current user has permissions to make changes in AD
         if (!(Assert-ADPermission -Server $DomainController -AdminGroups $AdminGroups)) {
-            Write-Verbose('Requesting credentials with required perms')
+            Write-Verbose('Requesting Active credentials')
+            # Skip this if WhatIf is specified
             if(!$WhatIfPreference){
-                [pscredential]$ADCredentials = Get-Credential -Message 'AD Credentials with sufficient privilages required' -UserName ($Domain+'\')
+                # Request credentials from the user
+                [pscredential]$ADCredentials = Get-Credential -Message 'Active Directory Credentials' -UserName ($Domain+'\')
+                # Split the username from the domain so it can be fed into some functions later
+                if($ADCredentials.UserName -match '\\'){
+                    $ADCredSamAccountName=$ADCredentials.UserName.Split('\')[1]
+                }else{$ADCredSamAccountName=$ADCredentials.UserName}
+                # Exit if no credentials provided
                 if(!$ADCredentials){
                     Write-Error('No AD credentials provided.')
                     exit
-                }else{
-                    #Check the provided credentials against other systems to cut down on amount of credentials that need to be entered in
+                # If the new credentials are valid continue
+                }
+                if(Assert-ADPermission -Server $DomainController -AdminGroups $AdminGroups -Credential $ADCredentials -SamAccountName $ADCredSamAccountName){
+                    $ADCredSet=$true
+                    # Check the provided credentials against other systems to cut down on amount of credentials that need to be entered in
                     if($M365DeploymentType -eq 'Hybrid'){
-                        if (Assert-EMSPermission -Server $EMSServer -Credential $ADCredentials -and $M365DeploymentType -eq 'Hybrid'){
+                        if ((Assert-EMSPermission -Server $EMSServer -Credential $ADCredentials) -and ($M365DeploymentType -eq 'Hybrid')){
                             $EMSCredentials = $ADCredentials
                             $EMSCredSet=$True
                         }
@@ -1845,7 +1884,10 @@ function New-CompanyUser {
                     if (Assert-ADSyncPermission -Server $ADSyncServer -Credential $ADCredentials){
                         $ADSyncCredentials = $ADCredentials
                         $ADSyncCredSet = $true
-                    }                    
+                    }               
+                }else{
+                    Write-Error('Exiting; Provided active directory credentials insufficient.')
+                    exit                    
                 }
             }
         }
@@ -1879,12 +1921,14 @@ function New-CompanyUser {
         #Detect if the function is being used in a pipeline
         if ($PSCmdlet.MyInvocation.ExpectingInput -and !$ADSyncCredentials -and !$ADSyncCredSet) {
             Write-Verbose('Pipeline input detected, requesting credentials for: '+$ADSyncServer)
-            [pscredential]$ADSyncCredentials = Get-Credential -Message ('Enter Credentials for: '+$ADSyncServer)
-            if(!$ADSyncCredentials){
-                Write-Error('No ADSync credentials provided.')
-                exit
+            if(!$WhatIfPreference){
+                [pscredential]$ADSyncCredentials = Get-Credential -Message ('Enter Credentials for: '+$ADSyncServer)
+                if(!$ADSyncCredentials){
+                    Write-Error('No ADSync credentials provided.')
+                    exit
+                }
+                $ADSyncCredSet=$true
             }
-            $ADSyncCredSet=$true
         }
     }
     process {
@@ -1915,7 +1959,9 @@ function New-CompanyUser {
             Write-Verbose('Entering Interactive for user: '+$SamAccountName)
             if (!$Branch) {
                 Write-Verbose('No User Branch Entered')
-                $Branch = Show-CompanyBranches -Branches $ADA
+                if($ADA){
+                    $Branch = Show-CompanyBranches -Branches $ADA
+                }
             }
             if (!$Title) {
                 $Title = Read-Host 'User title'
@@ -2030,6 +2076,12 @@ function New-CompanyUser {
         if ($MemberOf -contains ',' -and $MemberOf) {
             Write-Verbose('User is a MemberOf multiple groups, parsing groups.')
             [System.Collections.ArrayList]$MemberOf = $MemberOf.Split(',')          
+        }elseif($MemberOf -and $MemberOf -eq [System.String]){
+            [System.Collections.ArrayList]$MemberOf = @($MemberOf)
+        }
+        if($PSCmdlet.MyInvocation.ExpectingInput){
+            [boolean]$DistributionList = [system.convert]::ToBoolean($DistributionList)
+            [boolean]$FileServerAccess = [system.convert]::ToBoolean($FileServerAccess)    
         }
         #If FileServerAccess was set to True
         if ($FileServerAccess) {
@@ -2053,7 +2105,8 @@ function New-CompanyUser {
             Write-Verbose('Adding login script from Selected Branch')
             $logonscript = $ADA.$Branch.logonscript
         }
-        $MemberOf = $MemberOf | Sort-Object -Property @{Expression={$_.Trim()}} -Unique
+        if($MemberOf.count -gt 1){$MemberOf = $MemberOf | Sort-Object -Property @{Expression={$_.Trim()}} -Unique}
+        
         #Set variables for the Splat
         [string]$UserprincipalName = $SamAccountName + $EmailDomain
         #region Splatter
@@ -2085,7 +2138,6 @@ function New-CompanyUser {
             SamAccountName = $SamAccountName
             Server=$DomainController
             Whatif = $WhatIfPreference
-            Identity = $SamAccountName
             Office = $ADA.$Branch.office
             State = $ADA.$Branch.state
             Company = $ADA.$Branch.company
@@ -2099,7 +2151,9 @@ function New-CompanyUser {
             StreetAddress = $ADA.$Branch.street
             OfficePhone = $OfficePhone
             MobilePhone = $MobilePhone
-            Title = $Title                
+            Title = $Title
+            Enabled=$true
+            EmailAddress=$UserprincipalName
         }
         #Set the AD Attributes for the new user
         #this splat isused when a Hybrid deployment is specified
@@ -2166,7 +2220,7 @@ function New-CompanyUser {
         #endregion DataValidation
         #region DataConfirmation
         #Chance to confirm some account details
-        if ($Interactive) {
+        if ($Interactive -and !$PSCmdlet.MyInvocation.ExpectingInput) {
             Write-Verbose('------------------------------')
             Write-Verbose('Active Directory Details')
             Write-Verbose('------------------------------')
@@ -2190,8 +2244,8 @@ function New-CompanyUser {
         }
         #endregion DataConfirmation
         #Check if the current user has permissions to make changes in AD
-        if (!(Assert-ADPermission -Server $DomainController -AdminGroups $AdminGroups) -and $ADCredentials) {
-            Write-Verbose('Adding provided credentials to Splats')
+        if ($ADCredSet) {
+            Write-Verbose('Adding provided Active Credentials credentials to Splats')
             $SplatADAttributes.Add('Credential',$ADCredentials)
             $SplatADGetUser.Add('Credential',$ADCredentials)
             $SplatADGroups.Add('Credential',$ADCredentials)
@@ -2234,9 +2288,7 @@ function New-CompanyUser {
                         if($M365License){
                             Write-Verbose('Trying to assign a '+$M365License+' License to ; '+$UserprincipalName)
                             if( !(Set-AADULicense -UserPrincipalName $UserprincipalName -LicenseType $M365License -Whatif:$WhatIfPreference) -and $Interactive){
-                                if(!$WhatIfPreference){
-                                    Test-UserContinue -Message 'No Microsoft 365 License assigned. Press any key to continue'
-                                }
+                                Test-UserContinue -Message 'No Microsoft 365 License assigned. Press any key to continue'
                             }
                         }
                         Write-Verbose('Setting user MFA')                      
@@ -2254,7 +2306,7 @@ function New-CompanyUser {
         if(!(Assert-ADUExists -SamAccountName $SamAccountName -Server $DomainController -Credential $EMSCredentials -WhatIf:$WhatIfPreference) -and ($M365DeploymentType -eq 'Cloud')){
             Write-Verbose('This user will be created using Microsoft 365 Cloud deployment.')
             Write-Verbose($SamAccountName+' does not exists on AD; proceeding')
-            if ($PSCmdlet.ShouldProcess($DomainController, 'New-ADuser -Password "'+$SplatExchange.Password+'" -Name "'+$SplatExchange.Name+'" UserprincipalName "'+$SplatExchange.UserPrincipalName+'" DisplayName "'+$SplatExchange.DisplayName+'" GivenName "'+$SplatExchange.GivenName+'" Surname "'+$SplatExchange.Surname+'" Path "'+$SplatExchange.Path+'" SamAccountName "'+$SplatExchange.SamAccountName+'" Server "'+$SplatExchange.Server+'Set-ADUser -Server "'+$SplatADNewUser.Server+'" -Identity "'+$SplatADNewUser.Identity+'" -Office "'+$SplatADNewUser.Offic+'" -State "'+$SplatADNewUser.State+'" -Company "'+$SplatADNewUser.Company+'" -Manager "'+$SplatADNewUser.Manager+'" -Department "'+$SplatADNewUser.Department+'" -City "'+$SplatADNewUser.City+'" -Country "'+$SplatADNewUser.Country+'" -ScriptPath "'+$SplatADNewUser.ScriptPath+'" -PostalCode "'+$SplatADNewUser.PostalCode+'" -POBox "'+$SplatADNewUser.POBox+'" -StreetAddress "'+$SplatADNewUser.StreetAddress+'" -OfficePhone "'+$SplatADNewUser.OfficePhone+'" -MobilePhone "'+$SplatADNewUser.MobilePhone+'" -Title "'+$SplatADNewUser.Title)) {
+            if ($PSCmdlet.ShouldProcess($DomainController, 'New-ADuser -Password "'+$SplatADNewUser.AccountPassword+'" -Name "'+$SplatADNewUser.Name+'" UserprincipalName "'+$SplatADNewUser.UserPrincipalName+'" DisplayName "'+$SplatADNewUser.DisplayName+'" GivenName "'+$SplatADNewUser.GivenName+'" Surname "'+$SplatADNewUser.Surname+'" Path "'+$SplatADNewUser.Path+'" SamAccountName "'+$SplatADNewUser.SamAccountName+'" Server "'+$SplatADNewUser.Server+' -Office "'+$SplatADNewUser.Office+'" -State "'+$SplatADNewUser.State+'" -Company "'+$SplatADNewUser.Company+'" -Manager "'+$SplatADNewUser.Manager+'" -Department "'+$SplatADNewUser.Department+'" -City "'+$SplatADNewUser.City+'" -Country "'+$SplatADNewUser.Country+'" -ScriptPath "'+$SplatADNewUser.ScriptPath+'" -PostalCode "'+$SplatADNewUser.PostalCode+'" -POBox "'+$SplatADNewUser.POBox+'" -StreetAddress "'+$SplatADNewUser.StreetAddress+'" -OfficePhone "'+$SplatADNewUser.OfficePhone+'" -MobilePhone "'+$SplatADNewUser.MobilePhone+'" -Title "'+$SplatADNewUser.Title)) {
                 New-ADUser @SplatADNewUser -ErrorAction Stop
                 Get-ADUser @SplatADGetUser
             }
@@ -2279,9 +2331,7 @@ function New-CompanyUser {
                     if($M365License){
                         Write-Verbose('Trying to assign a '+$M365License+' License to ; '+$UserprincipalName)
                         if( !(Set-AADULicense -UserPrincipalName $UserprincipalName -LicenseType $M365License -Whatif:$WhatIfPreference) -and $Interactive){
-                            if(!$WhatIfPreference){
-                                Test-UserContinue -Message 'No Microsoft 365 License assigned. Press any key to continue'
-                            }
+                            Test-UserContinue -Message 'No Microsoft 365 License assigned. Press any key to continue'
                         }
                     }
                     Write-Verbose('Setting user MFA')                      
@@ -2295,6 +2345,5 @@ function New-CompanyUser {
         }
         #endregion Cloud
     }
-    
     end {Stop-Transcript}
 }
