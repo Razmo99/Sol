@@ -1332,10 +1332,10 @@ function Assert-AADPermission {
         }
         $AADDirectoryCurrentUserRoles = Get-AzureADUserMembership -ObjectId $AADCurrentSessionInfo -All $true | Where-Object { $_.ObjectType -eq "Role"}
         $result=$false
-        foreach ($AdminGroup in $AdminGroups) {
+        foreach ($AADRole in $AADRoles) {
             if($AADDirectoryCurrentUserRoles.DisplayName.Contains($AdminGroup)){
                 $result=$true
-                Write-verbose('"'+$AADCurrentSessionInfo+'" has AzureAD role "'+$AdminGroup+'" assigned')
+                Write-verbose('"'+$AADCurrentSessionInfo+'" has AzureAD role "'+$AADRole+'" assigned')
             }
         }
         if(!$result){
