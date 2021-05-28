@@ -17,11 +17,13 @@ function Test-AADConnected{
     system.string UserprincipalName
     #>
     #Requires -module AzureAD
-    [CmdletBinding(SupportsShouldProcess=$true)]
+    [CmdletBinding()]
     param (
-        [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)][String]$UserPrincipalName,
+        [Parameter(Mandatory=$false)][String]$UserPrincipalName,
         [Parameter(Mandatory=$false)][switch]$CredentialPrompt,
-        [Parameter(Mandatory=$false)][switch]$NoRetry
+        [Parameter(Mandatory=$false)][switch]$NoRetry,
+        [Parameter(Mandatory=$false)][switch]$NoPermissions,
+        [Parameter(Mandatory=$false)][System.Collections.ArrayList]$AADRoles=@()
     )
     Begin{}
     Process{
@@ -66,21 +68,23 @@ function Test-AADConnected{
                     }
                 }
             }
-
         }
     }
     End{
-        #Check User have perms
-        $AADCurrentSessionInfo = (Get-AzureADCurrentSessionInfo -ErrorAction Stop).Account.id
-        $AADDirectoryRole = (Get-AzureADDirectoryRole | Where-Object -Property DisplayName -eq 'Global Administrator').ObjectId
-        if(!(Get-AzureADDirectoryRoleMember -ObjectId $AADDirectoryRole).UserPrincipalName.contains($AADCurrentSessionInfo)){
-            Write-Warning('Insufficient Permissions')
-            Disconnect-AzureAD
-            Write-Verbose('Prompting for alternative credential.')
-            Test-AADConnected -CredentialPrompt
-        }else{
+        if($NoPermissions){
             return $true
-        }        
+        }else{
+            #Check User have perms
+            [HashTable]$SplatADPerms=@{}
+            if($AADRoles){
+                [void] $SplatADPerms.Add('AADRoles',$AADRoles)
+            }
+            if(Assert-AADPermission @SplatADPerms){
+                return $true
+            }else{
+                return $false
+            }  
+        }
     }
 }
 
@@ -344,15 +348,8 @@ function Set-MSolUMFA{
     begin{
         # Check if connected to Msol Session already
         if(!$WhatIfPreference){
-            if (!(Test-MSolConnected)) {
-                Write-Verbose('No existing Msol session detected')
-                try {
-                    Write-Verbose('Initiating Connection to Msol')
-                    Connect-MsolService -ErrorAction Stop
-                    Write-Verbose('Connected to Msol successfully')
-                }catch{
-                    return Write-Error($_.Exception.Message)
-                }
+            if (!(Assert-MsolPermission -UserPrincipalName -MsolRoles @('Privileged Authentication Administrator'))) {
+                return
             }
         }
     }
@@ -518,7 +515,7 @@ function Set-AADULicense {
     )
     Begin{
         #Ensure AzureAD is Connected
-        if (!(Test-AADConnected -whatif:$false)) {
+        if (!(Test-AADConnected -whatif:$false -AADRole @('User Administrator'))) {
             Write-Error('No AzureAD Connection')
             return
         }
@@ -607,7 +604,7 @@ Function Get-AADULicense{
         [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)][string]$UserPrincipalName
     )
     Begin{        
-        if (!(Test-AADConnected -whatif:$false)) {
+        if (!(Test-AADConnected -whatif:$false -AADRole @('User Administrator'))) {
         Write-Error -Message 'No AzureAD Connection'
         return
         }
@@ -747,6 +744,7 @@ function Convert-InteractivePromptsForTopologicalSort{
     }
     return $Results
 }
+
 function Resolve-Prompts {
     <#
     .SYNOPSIS
@@ -1138,6 +1136,7 @@ function Assert-ADSyncPermission{
         [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)][string]$Server,
         [parameter(Mandatory=$false)][pscredential]$Credential
     )
+    # Default parameters for the sessions
     [hashtable]$SplatNewPSSession = @{
         ComputerName = $Server
         ErrorAction = 'Stop'
@@ -1147,9 +1146,42 @@ function Assert-ADSyncPermission{
         Write-Verbose('ADSync Credentials provided')
         $SplatNewPSSession.Add('Credential',$Credential)
     }
+    # boolean to return
     $Result=$true
     try {
+        # open a sessions to the ADSync Server
         $Session = New-PSSession @SplatNewPSSession
+        # Try to get the local ADSync Groups and see if the user is part of them
+        try{
+            if($Credential.UserName.Contains('\')){
+                $CredentialUsername=$Credential.UserName.Split('\')[1]
+            }else{
+                $CredentialUsername=$Credential.UserName.Split('\')[0]
+            }
+            # Local Group
+            $SyncAdmins = Invoke-Command -Session $Session -Command { Get-LocalGroupMember -Group 'ADSyncAdmins' }
+            # Local Group
+            $ADSyncOperators = Invoke-Command -Session $Session -Command { Get-LocalGroupMember -Group 'ADSyncOperators' }
+            # boolean to determine answer
+            $ADSyncPerms=$false
+            # AD Groups the user is a memver of
+            $CredentialGroups=(Get-ADPrincipalGroupMembership -Identity $CredentialUsername).Name
+            # Merged Array of the Local Groups Above
+            # Compare Merged Local Groups against the current credentials Group Membership for a match
+            if((Compare-Object -ReferenceObject $ADSyncOperators.Name.Split('\') -DifferenceObject $CredentialGroups -ExcludeDifferent -IncludeEqual) -or (Compare-Object -ReferenceObject $SyncAdmins.Name.Split('\') -DifferenceObject $CredentialGroups -ExcludeDifferent -IncludeEqual)){
+                $ADSyncPerms=$true
+                Write-Verbose($CredentialUsername+' is part of a group that has sufficient permissions')
+            }
+            elseif(($ADSyncOperators.Name.Split('\').Contains($CredentialUsername) -or ($SyncAdmins.Name.Split('\').Contains($CredentialUsername) ))){
+                $ADSyncPerms=$true
+                Write-Verbose($CredentialUsername+' is has sufficient permissions')
+            }
+            #Adjust result if the user does not have permissions
+            if(!$ADSyncPerms){$Result=$false}
+        }catch{
+            Write-Error($_.Exception.Message)
+        }
+        # Clean up the session
         $Session | Remove-PSSession
     }
     catch [System.Management.Automation.ErrorRecord]{
@@ -1180,12 +1212,12 @@ function Assert-ADSyncPermission{
 function Assert-ADPermission {
     <#
     .SYNOPSIS
-    Asserts the current user is parts of the specified admin groups
+    Asserts that the current user is a part of the specified groups
     .DESCRIPTION
-    retreives the current users AD Groups and matches it against the provided admin groups for a match
+    Retreives the current users AD Groups and matches it against the provided admin groups for a match
     returns true for a match and false for no match
     .PARAMETER AdminGroups
-        ADGroup Names to match against
+        system.array ADGroup Names to match against
     .PARAMETER Server
         system.string Domain Controller to execute the search on
     .INPUTS
@@ -1249,6 +1281,134 @@ function Assert-ADPermission {
         Write-Verbose('"'+$SplatGetADPrince.Identity+'" has insufficient Active Directory permissions.')
         return $false
     }
+}
+
+function Assert-AADPermission {
+    <#
+    .SYNOPSIS
+    Asserts the current user has permission in Azure ActiveDirectory
+    .DESCRIPTION
+    Retreives the current users AzureAD Roles and matches it against the provided admin groups. Defaults to Global Administrator if no groups are provided
+    returns true for a match and false for no match
+    .PARAMETER AADRoles
+        Azure ActiveDirectory Role Display names to to check
+    .PARAMETER UserPrincipalName
+        Userprinciple name of to check the permissions of
+    .INPUTS
+        System.Collections.ArrayList for Admin Groups
+        system.string for UserPrincipalName
+    .OUTPUTS
+        system.boolean
+    #>
+    #Requires -module AzureAD
+    [CmdletBinding(SupportsShouldProcess=$true)]
+    param (
+        [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)][System.Collections.ArrayList]$AADRoles=@(),
+        [Parameter(Mandatory=$false)][String]$UserPrincipalName
+
+    )
+    Begin{
+        [Hashtable]$SplatTestAADConnected=@{
+            verbose = $false
+            NoPermission = $true
+        }
+        if ($UserPrincipalName) {
+            $SplatTestAADConnected.Add('UserPrincipalName',$UserPrincipalName)
+        }
+        Write-Verbose('Assert-AADPermission: calling "Test-AADConnected" with "NoPermissions" switch')
+        $null =  Test-AADConnected @SplatTestAADConnected
+    }
+    Process{
+        if($AADRoles -notcontains 'Global Administrator'){
+            [void] $AADRoles.Add('Global Administrator')
+        }
+        # Get the UserPrincipalName of any active AzureAD Sessions
+        # Return only the first result.
+        # This is just incase the user has multiple sessions open with differenet accounts
+        if(!$UserPrincipalName){
+            $AADCurrentSessionInfo = (Get-AzureADCurrentSessionInfo -ErrorAction Stop).Account.id | Select-Object -First 1
+        }else{
+            $AADCurrentSessionInfo = $UserPrincipalName
+        }
+        $AADDirectoryCurrentUserRoles = Get-AzureADUserMembership -ObjectId $AADCurrentSessionInfo -All $true | Where-Object { $_.ObjectType -eq "Role"}
+        $result=$false
+        foreach ($AdminGroup in $AdminGroups) {
+            if($AADDirectoryCurrentUserRoles.DisplayName.Contains($AdminGroup)){
+                $result=$true
+                Write-verbose('"'+$AADCurrentSessionInfo+'" has AzureAD role "'+$AdminGroup+'" assigned')
+            }
+        }
+        if(!$result){
+            Write-Warning('Insufficient AzureAD permissions')
+            return $result
+        }else{
+            Write-Verbose($AADCurrentSessionInfo +' has sufficient AzureAD permissions')
+            return $result
+        }
+    }
+    End{}
+}
+
+function Assert-MsolPermission {
+    <#
+    .SYNOPSIS
+    Asserts the current user has permission in Msol
+    .DESCRIPTION
+    Retreives the current users AzureAD Roles and matches it against the provided admin groups. Defaults to Global Administrator if no groups are provided
+    returns true for a match and false for no match
+    .PARAMETER MsolRoles
+        Msole Role Display names to to check the user has
+    .PARAMETER UserPrincipalName
+        Userprinciple name of to check the permissions of
+    .INPUTS
+        System.Collections.ArrayList for Admin Groups
+        system.string for UserPrincipalName
+    .OUTPUTS
+        system.boolean
+    #>
+    #Requires -module AzureAD
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)][System.Collections.ArrayList]$MsolRoles=@(),
+        [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)][String]$UserPrincipalName
+
+    )
+    Begin{
+        if (!(Test-MSolConnected)) {
+            Write-Verbose('No existing Msol session detected')
+            try {
+                Write-Verbose('Initiating connection to Msol')
+                Connect-MsolService -ErrorAction Stop
+                Write-Verbose('Connected to Msol successfully')
+            }catch{
+                return Write-Error($_.Exception.Message)
+            }
+        }
+    }
+    Process{
+        if($MsolRoles -notcontains 'Company Administrator'){
+            [void] $MsolRoles.Add('Company Administrator')
+        }
+        # Get the UserPrincipalName of any active AzureAD Sessions
+        # Return only the first result.
+        # This is just incase the user has multiple sessions open with differenet accounts
+        $MsolCurrentUserRoles = Get-MsolUserRole -UserPrincipalName $UserPrincipalName
+        $result=$false
+        foreach ($MsolRole in $MsolRoles) {
+            if($MsolCurrentUserRoles.Name.Contains($MsolRole)){
+                $result=$true
+                Write-verbose('"'+$UserPrincipalName+'" has Msol role "'+$MsolRole+'" assigned')
+            }
+        }
+        if(!$result){
+            Write-Warning('Insufficient Msol permissions')
+            return $result
+        }else{
+            Write-Verbose('Sufficient Msol permissions')
+            return $result
+        }
+    }
+    End{}
 }
 
 function Sync-Directories{
@@ -1825,16 +1985,15 @@ function New-CompanyUser {
         [Parameter(Mandatory=$true)][String]$FallbackUserOU,
         [Parameter(Mandatory=$true)][String]$Company,
         [Parameter(Mandatory=$false)][String][validateset('Hybrid','Cloud')]$M365DeploymentType='Hybrid'
-
     )
     begin {
         $CurrentPath = Split-Path -Path $PSCmdlet.MyInvocation.PSCommandPath -Parent
         Write-Verbose('Working Directory is:'+$CurrentPath)
-        #Start Logging
+        #Start logging
         if ($PSCmdlet.MyInvocation.ExpectingInput){
         Start-Logging -Path $CurrentPath -Name $Domain
         }
-        #Grab a DomainController to execute all AD Commands on
+        #Get a domain controller to execute all AD commands on
         try {
             $DomainController = (Get-ADDomainController -Discover -Domain $Domain -Service "PrimaryDC" -ErrorAction Stop).Hostname.Value
             Write-Verbose('Executing AD commands on: '+ $DomainController)
@@ -1843,7 +2002,7 @@ function New-CompanyUser {
             Write-Error($_.Exception.Message)
             exit
         }
-        #Create Quick call for XML Doc Path | Some stuff to handle if the file doesnt exist
+        #Get branch information XML document
         try {
             [xml]$XmlDocument = Get-Content -Path ($CurrentPath + '\BRANCHES.XML') -ErrorAction Stop
             $ADA = $XmlDocument.companies.$Company
@@ -1851,7 +2010,7 @@ function New-CompanyUser {
         catch [System.Management.Automation.ItemNotFoundException]{
             Write-Warning('Unable to Find BRANCHES.XML, no Branch information will be added')
         }
-        #Var to know if a EMS Credential has been set and is a known good
+        #variables to know if a EMS Credential has been set and is a known good
         $ADCredSet=$false
         $EMSCredSet=$false
         $ADSyncCredSet=$false
@@ -1891,7 +2050,7 @@ function New-CompanyUser {
                 }
             }
         }
-        #Detect if the current user or provided credentials are sufficient to get into the EMS Server
+        #Check if the current user or provided credentials are sufficient to get into the EMS Server
         if($M365DeploymentType -eq 'Hybrid'){
             if (!(Assert-EMSPermission -Server $EMSServer) -and !$EMSCredentials) {
                 Write-Verbose('Requesting Exchange management credentials.')
@@ -1918,7 +2077,8 @@ function New-CompanyUser {
                 }
             }
         }
-        #Detect if the function is being used in a pipeline
+        #Check if the function is being used in a pipeline
+        #Ask for ADSync credentials if it is
         if ($PSCmdlet.MyInvocation.ExpectingInput -and !$ADSyncCredentials -and !$ADSyncCredSet) {
             Write-Verbose('Pipeline input detected, requesting credentials for: '+$ADSyncServer)
             if(!$WhatIfPreference){
@@ -1933,7 +2093,7 @@ function New-CompanyUser {
     }
     process {
         #region DataValidation
-        #Create the Username Variable from the First and Lastname.
+        #Create the username variable from the first and lastname.
         if ($Firstname -and $Lastname) {
             Write-Verbose('Setting Username')
             $SamAccountName = ($Firstname + '.' + $Lastname).ToLower()
