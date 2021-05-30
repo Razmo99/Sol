@@ -1333,9 +1333,11 @@ function Assert-AADPermission {
         $AADDirectoryCurrentUserRoles = Get-AzureADUserMembership -ObjectId $AADCurrentSessionInfo -All $true | Where-Object { $_.ObjectType -eq "Role"}
         $result=$false
         foreach ($AADRole in $AADRoles) {
-            if($AADDirectoryCurrentUserRoles.DisplayName.Contains($AADRole)){
-                $result=$true
-                Write-verbose('"'+$AADCurrentSessionInfo+'" has AzureAD role "'+$AADRole+'" assigned')
+            if($AADDirectoryCurrentUserRoles.DisplayName){
+                if($AADDirectoryCurrentUserRoles.DisplayName.Contains($AADRole)){
+                    $result=$true
+                    Write-verbose('"'+$AADCurrentSessionInfo+'" has AzureAD role "'+$AADRole+'" assigned')
+                }
             }
         }
         if(!$result){
@@ -1386,20 +1388,29 @@ function Assert-MsolPermission {
         }
     }
     Process{
+        # Add the company Administrator Role, presumed to have access to everything.
         if($MsolRoles -notcontains 'Company Administrator'){
             [void] $MsolRoles.Add('Company Administrator')
         }
-        # Get the UserPrincipalName of any active AzureAD Sessions
-        # Return only the first result.
-        # This is just incase the user has multiple sessions open with differenet accounts
-        $MsolCurrentUserRoles = Get-MsolUserRole -UserPrincipalName $UserPrincipalName
-        $result=$false
-        foreach ($MsolRole in $MsolRoles) {
-            if($MsolCurrentUserRoles.Name.Contains($MsolRole)){
-                $result=$true
-                Write-verbose('"'+$UserPrincipalName+'" has Msol role "'+$MsolRole+'" assigned')
+        try{
+            $MsolCurrentUserRoles = Get-MsolUserRole -UserPrincipalName $UserPrincipalName -ErrorAction Stop
+            $result=$false
+            foreach ($MsolRole in $MsolRoles) {
+                if($MsolCurrentUserRoles.Name){
+                    if($MsolCurrentUserRoles.Name.Contains($MsolRole)){
+                        $result=$true
+                        Write-verbose('"'+$UserPrincipalName+'" has Msol role "'+$MsolRole+'" assigned')
+                    }
+                }
+            }
+        }catch{
+            if($_.Exception.Message -like 'Access Denied. You do not have permissions to call this cmdlet.'){
+                Write-Verbose($UserPrincipalName+' does not have permissions to call "Get-MsolUserRole"')
+            }else{
+                Write-Error($_.Exception.Message)
             }
         }
+
         if(!$result){
             Write-Warning('Insufficient Msol permissions')
             return $result
