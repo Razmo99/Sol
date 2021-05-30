@@ -1308,6 +1308,7 @@ function Assert-AADPermission {
 
     )
     Begin{
+        
         [Hashtable]$SplatTestAADConnected=@{
             verbose = $false
             NoPermission = $true
@@ -1330,10 +1331,14 @@ function Assert-AADPermission {
         }else{
             $AADCurrentSessionInfo = $UserPrincipalName
         }
+        #Get all AzureAD Roles
         $AADDirectoryCurrentUserRoles = Get-AzureADUserMembership -ObjectId $AADCurrentSessionInfo -All $true | Where-Object { $_.ObjectType -eq "Role"}
         $result=$false
+        #Iterate over all the AzureAD Roles
         foreach ($AADRole in $AADRoles) {
+            #Check first if we got any returned roles
             if($AADDirectoryCurrentUserRoles.DisplayName){
+                # Check for a match
                 if($AADDirectoryCurrentUserRoles.DisplayName.Contains($AADRole)){
                     $result=$true
                     Write-verbose('"'+$AADCurrentSessionInfo+'" has AzureAD role "'+$AADRole+'" assigned')
@@ -1359,7 +1364,7 @@ function Assert-MsolPermission {
     Retreives the current users AzureAD Roles and matches it against the provided admin groups. Defaults to Global Administrator if no groups are provided
     returns true for a match and false for no match
     .PARAMETER MsolRoles
-        Msole Role Display names to to check the user has
+        Msole Role Display names to to check for
     .PARAMETER UserPrincipalName
         Userprinciple name of to check the permissions of
     .INPUTS
@@ -1388,15 +1393,19 @@ function Assert-MsolPermission {
         }
     }
     Process{
-        # Add the company Administrator Role, presumed to have access to everything.
+        #Add the company Administrator Role, presumed to have access to everything.
         if($MsolRoles -notcontains 'Company Administrator'){
             [void] $MsolRoles.Add('Company Administrator')
         }
+        #In Try catch for users who cannot call Get-MsolUserRole
         try{
             $MsolCurrentUserRoles = Get-MsolUserRole -UserPrincipalName $UserPrincipalName -ErrorAction Stop
             $result=$false
+            #Iterate over all provided Msol Roles to check for
             foreach ($MsolRole in $MsolRoles) {
+                #Check if Get-MsolUserRole returned anything
                 if($MsolCurrentUserRoles.Name){
+                    # Check for a match
                     if($MsolCurrentUserRoles.Name.Contains($MsolRole)){
                         $result=$true
                         Write-verbose('"'+$UserPrincipalName+'" has Msol role "'+$MsolRole+'" assigned')
