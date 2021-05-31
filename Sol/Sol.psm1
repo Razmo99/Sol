@@ -17,7 +17,7 @@ function Test-AADConnected{
     system.string UserprincipalName
     #>
     #Requires -module AzureAD
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess=$true)]
     param (
         [Parameter(Mandatory=$false)][String]$UserPrincipalName,
         [Parameter(Mandatory=$false)][switch]$CredentialPrompt,
@@ -27,6 +27,12 @@ function Test-AADConnected{
     )
     Begin{}
     Process{
+        [HashTable]$SplatTestAADConn=@{
+            CredentialPrompt = $true
+        }
+        if($AADRoles){
+            [void] $SplatTestAADConn.Add('AADRoles',$AADRoles)
+        }
         [HashTable]$ConnectAADSplat = @{}
         if ($UserPrincipalName) {
             $ConnectAADSplat = @{
@@ -64,7 +70,7 @@ function Test-AADConnected{
                         Write-Warning('Aborted by user.')
                         return $false
                     }else{
-                        Test-AADConnected
+                        Test-AADConnected @SplatTestAADConn
                     }
                 }
             }
@@ -72,6 +78,7 @@ function Test-AADConnected{
     }
     End{
         if($NoPermissions){
+            Write-Verbose('Permissions will not be checked.')
             return $true
         }else{
             #Check User have perms
@@ -82,7 +89,8 @@ function Test-AADConnected{
             if(Assert-AADPermission @SplatADPerms){
                 return $true
             }else{
-                return $false
+                Disconnect-AzureAD
+                Test-AADConnected @SplatTestAADConn
             }  
         }
     }
@@ -347,10 +355,18 @@ function Set-MSolUMFA{
     )
     begin{
         # Check if connected to Msol Session already
-        if(!$WhatIfPreference){
-            if (!(Assert-MsolPermission -UserPrincipalName -MsolRoles @('Privileged Authentication Administrator'))) {
-                return
+        if (!(Test-MSolConnected)) {
+            Write-Verbose('No existing Msol session detected')
+            try {
+                Write-Verbose('Initiating connection to Msol')
+                Connect-MsolService -ErrorAction Stop
+                Write-Verbose('Connected to Msol successfully')
+            }catch{
+                return Write-Error($_.Exception.Message)
             }
+        }
+        if(!(Get-MsolUser -MaxResults 1 -ErrorAction Stop)){
+            return Write-Error('Insufficient permissions to set MFA')
         }
     }
     Process{
@@ -516,8 +532,7 @@ function Set-AADULicense {
     Begin{
         #Ensure AzureAD is Connected
         if (!(Test-AADConnected -whatif:$false -AADRole @('User Administrator'))) {
-            Write-Error('No AzureAD Connection')
-            return
+            return Write-Error('No AzureAD Connection')
         }
     }
     Process{
@@ -980,7 +995,7 @@ function Assert-AADUExists {
         [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)][string]$UserPrincipalName
     )
     begin {
-        if (!(Test-AADConnected -whatif:$false)) {
+        if (!(Test-AADConnected -whatif:$false -AADRoles @('User Administrator'))) {
             Write-Error -Message 'No AzureAD Connection'
             return
             }
@@ -1316,7 +1331,6 @@ function Assert-AADPermission {
         if ($UserPrincipalName) {
             $SplatTestAADConnected.Add('UserPrincipalName',$UserPrincipalName)
         }
-        Write-Verbose('Assert-AADPermission: calling "Test-AADConnected" with "NoPermissions" switch')
         $null =  Test-AADConnected @SplatTestAADConnected
     }
     Process{
