@@ -36,14 +36,14 @@ function Import-EMS {
             }
             #Add Credentials if presented
             if ($Credential) {
-                Write-Verbose('Credentials provided')
+                Write-Log -Level Verbose -Message 'Credentials provided'
                 $SplatNewPSSession.Add('Credential',$Credential)
             }
             #Whatif functionality
             if ($PSCmdlet.ShouldProcess($Server, 'Import-PSSession')) {
-                Write-Verbose ('Attempting to Connect to '+ $Server +' Using '+ $EMSAuth +' For Authentication')
+                Write-Log -Level Verbose -Message 'Attempting to Connect to {0} Using {1} For Authentication' -Arguments @($Server, $EMSAuth)
                 $EMS = New-PSSession @SplatNewPSSession
-                Write-Verbose ('Importing Modules')
+                Write-Log -Level Verbose -Message 'Importing Modules'
                 #This is done to get the imported functions into the global name space
                 Import-Module(Import-PSSession $EMS -DisableNameChecking -AllowClobber -ErrorAction Stop -CommandName Get-RemoteMailbox,New-RemoteMailbox) -Global
                 return $true
@@ -53,32 +53,32 @@ function Import-EMS {
         catch [System.Management.Automation.Remoting.PSRemotingTransportException]{
             #check the exception message to see if it was an access denied
             if ($_.Exception.Message.contains("AuthZ-CmdletAccessDeniedException")) {
-                Write-Warning("Failed to connect to EMS server with logged in account creds prompting for alternative creds")
+                Write-Log -Level Warning -Message 'Failed to connect to EMS server with logged in account creds prompting for alternative creds'
                 $EMSCreds = Get-Credential -Message "Enter EMS Admin Credentials"
                 #Try import EMS Modules again with provided credentials | same try catch as above
                 try {
                     if ($PSCmdlet.ShouldProcess($Server, 'Import-PSSession')) {
-                        Write-Verbose ('Attempting to Connect to '+ $Server +' Using '+ $EMSAuth +' For Authentication')
+                        Write-Log -Level Verbose -Message 'Attempting to Connect to {0} Using {1} For Authentication' -Arguments @($Server, $EMSAuth)
                         $EMS = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri ('http://'+$Server+'/Powershell') -Authentication $EMSAuth -ErrorAction Stop -Credential $EMSCreds
-                        Write-Verbose ('Importing Modules')
+                        Write-Log -Level Verbose -Message 'Importing Modules'
                         Import-Module(Import-PSSession $EMS -DisableNameChecking -AllowClobber -ErrorAction Stop -CommandName Get-RemoteMailbox,New-RemoteMailbox) -Global
                         return $true
                     }
                 }
                 catch {
                     #We don't get a 3rd chance.
-                    write-Error($_.Exception.Message)
+                    Write-Log -Level Error -Message $_.Exception.Message -ExceptionInfo $_
                     return $false  
                 }
             #If we dont get what we expect terminate
             }else {
-                Write-Error($_.Exception.Message)
+                Write-Log -Level Error -Message $_.Exception.Message -ExceptionInfo $_
                 exit
             }
         }
         Catch{
-            Write-Warning('Failed to connect to Exchange Server ' + $Server)
-            write-warning($_.Exception.Message)
+            Write-Log -Level Warning -Message 'Failed to connect to Exchange Server {0}' -Arguments $Server
+            Write-Log -Level Warning -Message $_.Exception.Message -ExceptionInfo $_
             return $false
         }
     }

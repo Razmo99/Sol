@@ -24,13 +24,13 @@ function Assert-MsolPermission {
     )
     Begin{
         if (!(Test-MSolConnected)) {
-            Write-Verbose('No existing Msol session detected')
+            Write-Log -Level Verbose -Message 'No existing Msol session detected'
             try {
-                Write-Verbose('Initiating connection to Msol')
+                Write-Log -Level Verbose -Message 'Initiating connection to Msol'
                 Connect-MsolService -ErrorAction Stop
-                Write-Verbose('Connected to Msol successfully')
+                Write-Log -Level Verbose -Message 'Connected to Msol successfully'
             }catch{
-                return Write-Error($_.Exception.Message)
+                return Write-Log -Level Error -Message $_.Exception.Message -ExceptionInfo $_
             }
         }
     }
@@ -50,23 +50,23 @@ function Assert-MsolPermission {
                     # Check for a match
                     if($MsolCurrentUserRoles.Name.Contains($MsolRole)){
                         $result=$true
-                        Write-verbose('"'+$UserPrincipalName+'" has Msol role "'+$MsolRole+'" assigned')
+                        Write-Log -Level Verbose -Message '{0} has Msol role {1} assigned' -Arguments @($UserPrincipalName, $MsolRole)
                     }
                 }
             }
         }catch{
             if($_.Exception.Message -like 'Access Denied. You do not have permissions to call this cmdlet.'){
-                Write-Verbose($UserPrincipalName+' does not have permissions to call "Get-MsolUserRole"')
+                Write-Log -Level Verbose -Message '{0} does not have permissions to call "Get-MsolUserRole"' -Arguments $UserPrincipalName
             }else{
-                Write-Error($_.Exception.Message)
+                Write-Log -Level Error -Message $_.Exception.Message -ExceptionInfo $_
             }
         }
 
         if(!$result){
-            Write-Warning('Insufficient Msol permissions')
+            Write-Log -Level Warning -Message 'Insufficient Msol permissions'
             return $result
         }else{
-            Write-Verbose('Sufficient Msol permissions')
+            Write-Log -Level Verbose -Message 'Sufficient Msol permissions'
             return $result
         }
     }

@@ -30,7 +30,7 @@ function Test-PromptsWRequsOTHPrompts {
     [HashTable]$Results=@{}
     $MissingRequirements=New-Object System.Collections.Queue
     # Iterate over all DPrompts with Dependancies
-    Write-Verbose('Processing prompts with requirements on other prompts')
+    Write-Log -Level Verbose -Message 'Processing prompts with requirements on other prompts'
     foreach ($key in $Prompts.keys) {
         # Bool to tell if the Prompt should be displayed to the user
         $CriterialMet = $true
@@ -38,7 +38,7 @@ function Test-PromptsWRequsOTHPrompts {
         if(!$FileServerAccess){
             # If promp FileServerAccess is False Criteria not met
             if($Prompts.$key.Requirements.FileServerAccess -eq $true){
-                Write-Verbose($key+': Criterial Failed | Missing File Server Access')
+                Write-Log -Level Verbose -Message '{0}: Criterial Failed | Missing File Server Access' -Arguments $key
                 $CriterialMet = $false
             }
         # If the Prompt has M365License AND user has M365License
@@ -46,7 +46,7 @@ function Test-PromptsWRequsOTHPrompts {
         if($Prompts.$key.Requirements.M365License){
             # If the License is not within the M365 Array Criteria not met
             if(($Prompts.$key.Requirements.M365License -notcontains $M365License) -and !($Prompts.$key.Requirements.M365License -contains 'Any')){
-                Write-Verbose($key+': Criterial Failed | Missing Microsoft 365 License '+$Prompts.$key.Requirements.M365License)
+                Write-Log -Level Verbose -Message '{0}: Criterial Failed | Missing Microsoft 365 License {1}' -Arguments @($key, $Prompts.$key.Requirements.M365License)
                 $CriterialMet=$false
             }       
         } 
@@ -61,18 +61,18 @@ function Test-PromptsWRequsOTHPrompts {
             While($MissingRequirements -gt 0){
                 $CurrentReq = $MissingRequirements.Dequeue()
                 if($ResultsWOReqs.keys -contains $CurrentReq){
-                    Write-Verbose($key + ': Found Requirement "' + $CurrentReq+'"')
+                    Write-Log -Level Verbose -Message '{0}: Found Requirement "{1}"' -Arguments @($key, $CurrentReq)
                     $NewReqs = New-Object System.Collections.ArrayList(,$Prompts.$Key.Requirements.Prompts)
                     $NewReqs.remove($CurrentReq)
                     $Prompts.$Key.Requirements.Prompts = $NewReqs
                 }else{
-                    Write-Verbose($Key+': Criterial Failed | Missing Requirement: '+$CurrentReq)
+                    Write-Log -Level Verbose -Message '{0}: Criterial Failed | Missing Requirement: {1}' -Arguments @($Key, $CurrentReq)
                     $CriterialMet=$false
                 }
             }
         }
         if($CriterialMet){
-            Write-Verbose($Key+': Criteria Met')
+            Write-Log -Level Verbose -Message '{0}: Criteria Met' -Arguments $Key
             [void] $Results.Add($Key,$Prompts[$Key])
         }
     }

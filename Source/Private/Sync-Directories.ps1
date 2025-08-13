@@ -30,7 +30,7 @@ function Sync-Directories{
         if (!$Credential) {
             $Credential = Get-Credential -Message ('Enter Credentials for '+$Server)
             if (!$Credential) {
-                return Write-Error('No Credentials Provided')
+                return Write-Log -Level Error -Message 'No Credentials Provided'
             }
         }
     }
@@ -45,7 +45,7 @@ function Sync-Directories{
             }
             Remove-PSSession $DCSession
         }
-        Write-Verbose('Syncing Domain Controllers')
+        Write-Log -Level Verbose -Message 'Syncing Domain Controllers'
         if ($PSCmdlet.ShouldProcess($Server, "repadmin.exe /syncall /AdeP")) {
             if((Invoke-Command $ADReplicate -ErrorAction Stop).Result -eq 'Success'){
                 return $true
@@ -70,19 +70,19 @@ function Sync-Directories{
                             $Finished = $true
                             return $true
                         }catch [System.Management.Automation.RuntimeException]{
-                            Write-Verbose('Sync is already running. Cannot start a new run till this one completes.')
+                            Write-Log -Level Verbose -Message 'Sync is already running. Cannot start a new run till this one completes.'
                             $Finished = $false
                         }catch{
-                            Write-Verbose($_.Exception.Message)
+                            Write-Log -Level Verbose -Message $_.Exception.Message -ExceptionInfo $_
                         }
                     }elseif($TimeNow -ge $TimeEnd){
                         $Finished = $true
-                        Write-Warning('Searched for 2 minute Exiting...')
-                        Write-Warning('Azure AD is still Busy.')
-                        Write-Error('User Creation will no continue past this point')
+                        Write-Log -Level Warning -Message 'Searched for 2 minute Exiting...'
+                        Write-Log -Level Warning -Message 'Azure AD is still Busy.'
+                        Write-Log -Level Error -Message 'User Creation will no continue past this point'
                         return $false
                     }else {
-                        Write-Verbose('Sleeping 10 second')
+                        Write-Log -Level Verbose -Message 'Sleeping 10 second'
                         Start-Sleep -Seconds 10
                     }
                 } until ($Finished -eq $true)
@@ -90,7 +90,7 @@ function Sync-Directories{
             Remove-PSSession $AADConnectSession
         }
         if ($PSCmdlet.ShouldProcess($Server, "Start-ADSyncSyncCycle -PolicyType Delta")) {
-            Write-Verbose('Syncing ADConnect')
+            Write-Log -Level Verbose -Message 'Syncing ADConnect'
             $PSIResult = Invoke-Command $AADConnectSync -ErrorAction Stop
             if ($PSIResult) {
                 return $true
@@ -101,7 +101,7 @@ function Sync-Directories{
         }
 
     }elseif(!$AzureActiveDirectory -and !$ActiveDirectory) {
-        return Write-Error('No System switch specified')
+        return Write-Log -Level Error -Message 'No System switch specified'
     }else{
         return $false
     }

@@ -29,7 +29,7 @@ function Assert-EMSPermission {
     }
     #Add Credentials if presented
     if ($Credential) {
-        Write-Verbose('Exchange Management Credentials provided')
+        Write-Log -Level Verbose -Message 'Exchange Management Credentials provided'
         $SplatNewPSSession.Add('Credential',$Credential)
     }    
     try {
@@ -44,10 +44,10 @@ function Assert-EMSPermission {
         if ($_.Exception.Message.contains("AuthZ-CmdletAccessDeniedException")) {
             return $false
         }else{
-            Write-Error($_.Exception.Message)
+            Write-Log -Level Error -Message $_.Exception.Message -ExceptionInfo $_
         }
     }
     catch {
-        Write-Error($_.Exception.Message)
+        Write-Log -Level Error -Message $_.Exception.Message -ExceptionInfo $_
     }
 }

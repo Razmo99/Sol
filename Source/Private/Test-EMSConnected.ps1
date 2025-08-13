@@ -14,14 +14,14 @@ function Test-EMSConnected {
     $CheckExistingSession = Get-PSSession | Where-Object {$_.State -eq 'Opened' -and $_.ConfigurationName -eq 'Microsoft.Exchange'}
     [bool]$CheckEMSCommandPresent = Get-Command New-RemoteMailbox -ErrorAction SilentlyContinue
     if(!$CheckEMSCommandPresent){
-        Write-Verbose('Unable to get EMS Commands')
+        Write-Log -Level Verbose -Message 'Unable to get EMS Commands'
         if ($CheckExistingSession) {
-            Write-Verbose('Removing stale PSSession')
+            Write-Log -Level Verbose -Message 'Removing stale PSSession'
             $CheckExistingSession | Remove-PSSession
         }
         return $false
     }elseif($CheckExistingSession) {
-        Write-Verbose('EMS Session Already Present')
+        Write-Log -Level Verbose -Message 'EMS Session Already Present'
         return $true
     }
 }

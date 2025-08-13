@@ -21,7 +21,7 @@ function Assert-AADUExists {
     )
     begin {
         if (!(Test-AADConnected -whatif:$false -AADRoles @('User Administrator'))) {
-            Write-Error -Message 'No AzureAD Connection'
+            Write-Log -Level Error -Message 'No AzureAD Connection'
             return
             }
     }
@@ -32,11 +32,11 @@ function Assert-AADUExists {
 
             }
             if ($Exists) {
-                Write-Verbose('Found '+$UserPrincipalName+' in AzureAD')
+                Write-Log -Level Verbose -Message 'Found {0} in AzureAD' -Arguments $UserPrincipalName
                 return $true
             }
             else {
-                Write-Verbose ($UserPrincipalName + ' could not be found in AzureAD')
+                Write-Log -Level Verbose -Message '{0} could not be found in AzureAD' -Arguments $UserPrincipalName
                 return $false
             }
         }

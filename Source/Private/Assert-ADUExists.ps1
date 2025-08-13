@@ -40,10 +40,10 @@ function Assert-ADUExists {
             if ($Credential) {$SplatADGetUser.Add("Credential",$Credential)}
             #Test if the provided person already exists on ActiveDirectory
             if ([bool] (Get-ADUser @SplatADGetUser)) {
-                Write-Verbose ('Found '+$SamAccountName+' in AD')
+                Write-Log -Level Verbose -Message 'Found {0} in AD' -Arguments $SamAccountName
                 return $true
             }else {
-                Write-Verbose (' could not find '+$SamAccountName+' in AD')
+                Write-Log -Level Verbose -Message 'Could not find {0} in AD' -Arguments $SamAccountName
                 return $false
             }  
         }

@@ -25,7 +25,7 @@ function Assert-ADSyncPermission{
     }
     #Add Credentials if presented
     if ($Credential) {
-        Write-Verbose('ADSync Credentials provided')
+        Write-Log -Level Verbose -Message 'ADSync Credentials provided'
         $SplatNewPSSession.Add('Credential',$Credential)
     }
     # boolean to return
@@ -52,16 +52,16 @@ function Assert-ADSyncPermission{
             # Compare Merged Local Groups against the current credentials Group Membership for a match
             if((Compare-Object -ReferenceObject $ADSyncOperators.Name.Split('\') -DifferenceObject $CredentialGroups -ExcludeDifferent -IncludeEqual) -or (Compare-Object -ReferenceObject $SyncAdmins.Name.Split('\') -DifferenceObject $CredentialGroups -ExcludeDifferent -IncludeEqual)){
                 $ADSyncPerms=$true
-                Write-Verbose($CredentialUsername+' is part of a group that has sufficient permissions')
+                Write-Log -Level Verbose -Message '{0} is part of a group that has sufficient permissions' -Arguments $CredentialUsername
             }
-            elseif(($ADSyncOperators.Name.Split('\').Contains($CredentialUsername) -or ($SyncAdmins.Name.Split('\').Contains($CredentialUsername) ))){
-                $ADSyncPerms=$true
-                Write-Verbose($CredentialUsername+' is has sufficient permissions')
+            elseif(($ADSyncOperators.Name.Split('\').Contains($CredentialUsername) -or ($SyncAdmins.Name.Split('\').Contains($CredentialUsername) ))){ 
+                $ADSyncPerms=$true 
+                Write-Log -Level Verbose -Message '{0} is has sufficient permissions' -Arguments $CredentialUsername
             }
             #Adjust result if the user does not have permissions
             if(!$ADSyncPerms){$Result=$false}
         }catch{
-            Write-Error($_.Exception.Message)
+            Write-Log -Level Error -Message $_.Exception.Message -ExceptionInfo $_
         }
         # Clean up the session
         $Session | Remove-PSSession
@@ -70,23 +70,23 @@ function Assert-ADSyncPermission{
         if ($_.Exception.Message.contains('Access is denied')){
             $Result = $False
         }else{
-            Write-Error($_.Exception.Message)
+            Write-Log -Level Error -Message $_.Exception.Message -ExceptionInfo $_
         }
     }
     catch{
         if($_.Exception.Message.Contains('The user name or password is incorrect.')){
-            Write-Verbose('Incorrect Username or password.')
+            Write-Log -Level Verbose -Message 'Incorrect Username or password.'
             $Result = $False
         }elseif($_.Exception.Message.Contains('Access is denied.')){
-            Write-Verbose('ADSync: The provided credentials are insufficient.')
+            Write-Log -Level Verbose -Message 'ADSync: The provided credentials are insufficient.'
             $Result = $False
         }else{
             $Result = $False
-            Write-Error($_.Exception.Message)
+            Write-Log -Level Error -Message $_.Exception.Message -ExceptionInfo $_
         }
     }
     if($Result){
-        Write-verbose('ADSync Credentials have sufficient permissions.')
+        Write-Log -Level Verbose -Message 'ADSync Credentials have sufficient permissions.'
     }
     return $Result
 }

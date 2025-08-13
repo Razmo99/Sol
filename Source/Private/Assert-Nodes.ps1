@@ -12,7 +12,7 @@ function Assert-Nodes {
                     [void] $allNodes.add($currentDestinationNode)
                 }else{
                 $MissingSourceNodes.Enqueue($currentNode)
-                Write-Verbose($CurrentNode+': Criteria Not Met | Destination Node Missing for: '+$currentDestinationNode)
+                Write-Log -Level Verbose -Message '{0}: Criteria Not Met | Destination Node Missing for: {1}' -Arguments @($CurrentNode, $currentDestinationNode)
                 }
                 }
             }

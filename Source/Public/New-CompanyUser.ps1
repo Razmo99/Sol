@@ -37,7 +37,7 @@ function New-CompanyUser {
         [Parameter(Mandatory=$false)][PSCredential]$ADSyncAdminCreds
     )
     Begin{
-        Start-Logging -Path $PSScriptRoot -Name ($Firstname+'.'+$Lastname)
+        Initialize-Logging -LogFilePath $PSScriptRoot -LogFileNamePrefix ($Firstname+'.'+$Lastname)
         if($ADAdminCreds){
             [HashTable]$SplatAssertADPerms = @{
                 Server = $Domain
@@ -55,7 +55,7 @@ function New-CompanyUser {
                 $ADAdminCreds = Get-Credential -Message 'Enter AD Admin Credentials'
                 $SplatAssertADPerms.Credential = $ADAdminCreds
                 if(!(Assert-ADPermission @SplatAssertADPerms)){
-                    Write-Error 'Provided Credentials have insufficient permissions'
+                    Write-Log -Level Error -Message 'Provided Credentials have insufficient permissions'
                     return
                 }
             }
@@ -65,7 +65,7 @@ function New-CompanyUser {
                 if(!(Assert-MsolPermission -UserPrincipalName (whoami /upn) -MsolRoles @('User Administrator','Helpdesk Administrator'))){
                     $AADAdminCreds = Get-Credential -Message 'Enter AAD Admin Credentials'
                     if(!(Assert-MsolPermission -UserPrincipalName $AADAdminCreds.UserName -MsolRoles @('User Administrator','Helpdesk Administrator'))){
-                        Write-Error 'Provided Credentials have insufficient permissions'
+                        Write-Log -Level Error -Message 'Provided Credentials have insufficient permissions'
                         return
                     }
                 }
@@ -86,7 +86,7 @@ function New-CompanyUser {
                 $EMSAdminCreds = Get-Credential -Message 'Enter EMS Admin Credentials'
                 $SplatAssertEMSPerms.Credential = $EMSAdminCreds
                 if(!(Assert-EMSPermission @SplatAssertEMSPerms)){
-                    Write-Error 'Provided Credentials have insufficient permissions'
+                    Write-Log -Level Error -Message 'Provided Credentials have insufficient permissions'
                     return
                 }
             }
@@ -106,7 +106,7 @@ function New-CompanyUser {
                 $ADSyncAdminCreds = Get-Credential -Message 'Enter ADSync Admin Credentials'
                 $SplatAssertADSyncPerms.Credential = $ADSyncAdminCreds
                 if(!(Assert-ADSyncPermission @SplatAssertADSyncPerms)){
-                    Write-Error 'Provided Credentials have insufficient permissions'
+                    Write-Log -Level Error -Message 'Provided Credentials have insufficient permissions'
                     return
                 }
             }
@@ -146,15 +146,15 @@ function New-CompanyUser {
             $SplatAssertADUExists.Add('Credential',$ADAdminCreds)
         }
         if(Assert-ADUExists @SplatAssertADUExists){
-            Write-Error 'User Already Exists in AD'
+            Write-Log -Level Error -Message 'User Already Exists in AD'
             return
         }
         if(Assert-AADUExists -UserPrincipalName $UserPrincipalName){
-            Write-Error 'User Already Exists in AAD'
+            Write-Log -Level Error -Message 'User Already Exists in AAD'
             return
         }
         if(Assert-EMSUExists -SamAccountName $SamAccountName -Server $EMSServer){
-            Write-Error 'User Already Exists in EMS'
+            Write-Log -Level Error -Message 'User Already Exists in EMS'
             return
         }
         [HashTable]$SplatNewADUser = @{
@@ -192,7 +192,7 @@ function New-CompanyUser {
             try{
                 New-ADUser @SplatNewADUser -ErrorAction Stop
             }catch{
-                Write-Error $_.Exception.Message
+                Write-Log -Level Error -Message $_.Exception.Message -ExceptionInfo $_
                 return
             }
         }
@@ -255,6 +255,5 @@ function New-CompanyUser {
         }
     }
     End{
-        Stop-Transcript
     }
 }

@@ -4,7 +4,7 @@ function Test-Prompts {
         [Parameter(Mandatory=$true)][HashTable]$Prompts
     )
     [HashTable]$Results=@{}
-    Write-Verbose('Processing prompts without Requirements')
+    Write-Log -Level Verbose -Message 'Processing prompts without Requirements'
     # Iterate over the Prompts
     foreach ($key in $Prompts.keys) {
         $Prompt = $Prompts[$Key]

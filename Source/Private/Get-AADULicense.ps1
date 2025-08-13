@@ -19,7 +19,7 @@ Function Get-AADULicense{
     )
     Begin{        
         if (!(Test-AADConnected -whatif:$false -AADRole @('User Administrator'))) {
-        Write-Error -Message 'No AzureAD Connection'
+        Write-Log -Level Error -Message 'No AzureAD Connection'
         return
         }
         $SkuInfo = Get-AzureADSubscribedSku

@@ -47,27 +47,27 @@ function Assert-ADPermission {
             foreach($Result in $ComparedResults){
                 # if a match is found return true and break the loop
                 if ($Result.SideIndicator -eq "==") {
-                    Write-Verbose('"'+$SplatGetADPrince.Identity+'" has sufficient Active Directory permissions.')
+                    Write-Log -Level Verbose -Message '{0} has sufficient Active Directory permissions.' -Arguments $SplatGetADPrince.Identity
                     return $true
                     break
                 }
             }
         }catch [Microsoft.ActiveDirectory.Management.ADException]{
             #Evidently the user doesnt have access to AD, as they are unable to get what groups they are a memeber of
-            Write-Verbose($_.Exception.message)
-            Write-Verbose('"'+$SplatGetADPrince.Identity+'" has insufficient Active Directory permissions.')
+            Write-Log -Level Verbose -Message $_.Exception.message -ExceptionInfo $_
+            Write-Log -Level Verbose -Message '{0} has insufficient Active Directory permissions.' -Arguments $SplatGetADPrince.Identity
             return $false
         }catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException]{
-            Write-Verbose('Failed to find "'+$SplatGetADPrince.Identity+'" on "'+$Server+'"')
+            Write-Log -Level Verbose -Message 'Failed to find {0} on {1}' -Arguments @($SplatGetADPrince.Identity, $Server)
             return $false
         }catch [System.Security.Authentication.AuthenticationException]{
-            Write-Verbose($Server+' has rejected the client credentials.')
+            Write-Log -Level Verbose -Message '{0} has rejected the client credentials.' -Arguments $Server
             return $false
         }catch{
-            Write-Error($_.Exception.message)
+            Write-Log -Level Error -Message $_.Exception.message -ExceptionInfo $_
         }
         # If the foreach loop doesnt return/break the function return false as no match was found
-        Write-Verbose('"'+$SplatGetADPrince.Identity+'" has insufficient Active Directory permissions.')
+        Write-Log -Level Verbose -Message '{0} has insufficient Active Directory permissions.' -Arguments $SplatGetADPrince.Identity
         return $false
     }
 }

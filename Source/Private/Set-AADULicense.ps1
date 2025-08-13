@@ -27,7 +27,7 @@ function Set-AADULicense {
     Begin{
         #Ensure AzureAD is Connected
         if (!(Test-AADConnected -whatif:$false -AADRole @('User Administrator'))) {
-            return Write-Error('No AzureAD Connection')
+            return Write-Log -Level Error -Message 'No AzureAD Connection'
         }
     }
     Process{
@@ -36,28 +36,28 @@ function Set-AADULicense {
             try{
                 $UseLoc = (Get-AzureADUser -ObjectID $UserPrincipalName).UsageLocation
             }catch{            
-                return Write-Error($_.Exception.Message)
+                return Write-Log -Level Error -Message $_.Exception.Message -ExceptionInfo $_
             }
             if ($useLoc -eq $CountryCode) {
-                Write-Verbose('Country already set to; '+$CountryCode)
+                Write-Log -Level Verbose -Message 'Country already set to; {0}' -Arguments $CountryCode
             }else{
                 
                 if(!$UseLoc){
-                    Write-Verbose('Country code not set; Setting to: '+$CountryCode)
+                    Write-Log -Level Verbose -Message 'Country code not set; Setting to: {0}' -Arguments $CountryCode
                 }elseif($UseLoc){
-                    Write-Verbose('Country code is currently: '+$UseLoc)
+                    Write-Log -Level Verbose -Message 'Country code is currently: {0}' -Arguments $UseLoc
                 }
                 try {
                     Set-AzureADUser -ObjectID $UserPrincipalName -UsageLocation $CountryCode -ErrorAction Stop
                 }
                 catch {
                     if(exception.message.contains('Insufficient privileges to complete the operation.')){
-                        Write-Warning('RunAs User has Insufficient privileges')
+                        Write-Log -Level Warning -Message 'RunAs User has Insufficient privileges'
                         Disconnect-AzureAD -WhatIf:$false
                         Connect-AzureAD -WhatIf:$false
                         Set-AADULicense -CountryCode $CountryCode -UserPrincipalName $UserPrincipalName -LicenseType $LicenseType
                     }else{
-                        Write-Error($_.Exception.Message)
+                        Write-Log -Level Error -Message $_.Exception.Message -ExceptionInfo $_
                         return
                     }
                 }
@@ -69,7 +69,7 @@ function Set-AADULicense {
 
         $LicenseInfo = Get-AzureADSubscribedSku | Where-Object -Property SkuPartNumber -Value $planName -EQ | Select-Object SkuPartNumber, consumedunits, prepaidunits
         if ($LicenseInfo.consumedunits -lt $LicenseInfo.prepaidunits.enabled) {
-            Write-Verbose(($LicenseInfo.prepaidunits.enabled - $LicenseInfo.consumedunits).ToString()+' '+$LicenseType+' Available; Proceeding to assign a License')
+            Write-Log -Level Verbose -Message '{0} {1} Available; Proceeding to assign a License' -Arguments @(($LicenseInfo.prepaidunits.enabled - $LicenseInfo.consumedunits).ToString(), $LicenseType)
             $License = New-Object -TypeName Microsoft.Open.AzureAD.Model.AssignedLicense
             $License.SkuId = (Get-AzureADSubscribedSku | Where-Object -Property SkuPartNumber -Value $planName -EQ).SkuID
             $LicensesToAssign = New-Object -TypeName Microsoft.Open.AzureAD.Model.AssignedLicenses
@@ -85,10 +85,10 @@ function Set-AADULicense {
                 }
             }
         }elseif(($LicenseInfo.prepaidunits.enabled - $LicenseInfo.consumedunits) -eq 0){
-            Write-Warning('No '+$LicenseType+' License Available. No License will be assigned')
-            Write-Verbose($LicenseInfo.prepaidunits.enabled.ToString() + ' PrePaid | '+ $LicenseInfo.consumedunits.ToString() + ' Consumed')
+            Write-Log -Level Warning -Message 'No {0} License Available. No License will be assigned' -Arguments $LicenseType
+            Write-Log -Level Verbose -Message '{0} PrePaid | {1} Consumed' -Arguments @($LicenseInfo.prepaidunits.enabled.ToString(), $LicenseInfo.consumedunits.ToString())
         }else {
-            Write-Error -Message 'Unhandled Exception'
+            Write-Log -Level Error -Message 'Unhandled Exception'
         }
     }
     End{}

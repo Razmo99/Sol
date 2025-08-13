@@ -40,14 +40,14 @@ function Wait-ADUSynced {
                 $TimeNow = Get-Date
                 if (Assert-ADUExists @SplatUserExists) {
                     $Finished = $true
-                    Write-Verbose('Found '+$SamAccountName+' In AD')
+                    Write-Log -Level Verbose -Message 'Found {0} In AD' -Arguments $SamAccountName
                     return $true
                 }elseif($TimeNow -ge $TimeEnd){
                     $Finished = $true
-                    Write-Warning('Searched for 1 minute Exiting...')
+                    Write-Log -Level Warning -Message 'Searched for 1 minute Exiting...'
                     return $false
                 }else {
-                    Write-Verbose('Sleeping 5 second')
+                    Write-Log -Level Verbose -Message 'Sleeping 5 second'
                     Start-Sleep -Seconds 5
                 }
             } until ($Finished -eq $true)            

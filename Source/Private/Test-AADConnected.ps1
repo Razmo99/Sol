@@ -51,23 +51,23 @@ function Test-AADConnected{
         }
         try{
             if((Get-AzureADCurrentSessionInfo -ErrorAction Stop).Environment.Name -eq 'AzureCloud') {
-                Write-Verbose('AzureAD Session open continuing')
+                Write-Log -Level Verbose -Message 'AzureAD Session open continuing'
             }else{
                 return $false
             }
         }
         catch [Microsoft.Open.Azure.AD.CommonLibrary.AadNeedAuthenticationException] {
             try{
-                Write-Verbose('Connecting to Azure AD.')
+                Write-Log -Level Verbose -Message 'Connecting to Azure AD.'
                 Connect-AzureAD @ConnectAADSplat | Out-Null
             }
             catch {
-                Write-Error($_.Exception.Message)
+                Write-Log -Level Error -Message $_.Exception.Message -ExceptionInfo $_
                 if(!$NoRetry){
                     $response = read-host "Press enter to try again or any other key (and then enter) to abort"
                     $aborted = ! [bool]$response
                     if(!$aborted){
-                        Write-Warning('Aborted by user.')
+                        Write-Log -Level Warning -Message 'Aborted by user.'
                         return $false
                     }else{
                         Test-AADConnected @SplatTestAADConn
@@ -78,7 +78,7 @@ function Test-AADConnected{
     }
     End{
         if($NoPermissions){
-            Write-Verbose('Permissions will not be checked.')
+            Write-Log -Level Verbose -Message 'Permissions will not be checked.'
             return $true
         }else{
             #Check User have perms

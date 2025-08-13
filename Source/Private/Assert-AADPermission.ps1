@@ -55,15 +55,15 @@ function Assert-AADPermission {
                 # Check for a match
                 if($AADDirectoryCurrentUserRoles.DisplayName.Contains($AADRole)){
                     $result=$true
-                    Write-verbose('"'+$AADCurrentSessionInfo+'" has AzureAD role "'+$AADRole+'" assigned')
+                    Write-Log -Level Verbose -Message '{0} has AzureAD role {1} assigned' -Arguments @($AADCurrentSessionInfo, $AADRole)
                 }
             }
         }
         if(!$result){
-            Write-Warning('Insufficient AzureAD permissions')
+            Write-Log -Level Warning -Message 'Insufficient AzureAD permissions'
             return $result
         }else{
-            Write-Verbose($AADCurrentSessionInfo +' has sufficient AzureAD permissions')
+            Write-Log -Level Verbose -Message '{0} has sufficient AzureAD permissions' -Arguments $AADCurrentSessionInfo
             return $result
         }
     }

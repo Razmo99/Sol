@@ -29,16 +29,16 @@ function Wait-AADUSynced {
                 $TimeNow = Get-Date
                 if (Assert-AADUExists -UserPrincipalName $UserPrincipalName) {
                     $Finished = $true
-                    Write-Verbose('Found '+$UserPrincipalName+' In AzureAD')
+                    Write-Log -Level Verbose -Message 'Found {0} In AzureAD' -Arguments $UserPrincipalName
                     return $true
                 }elseif($TimeNow -ge $TimeEnd){
                     $Finished = $true
-                    Write-Warning('Searched for 2 minute Exiting...')
-                    Write-Warning('Failed to confirm AzureAD Connection')
-                    Write-Error('User Creation will no continue past this point')
+                    Write-Log -Level Warning -Message 'Searched for 2 minute Exiting...'
+                    Write-Log -Level Warning -Message 'Failed to confirm AzureAD Connection'
+                    Write-Log -Level Error -Message 'User Creation will no continue past this point'
                     return $false
                 }else {
-                    Write-Verbose('Sleeping 5 second')
+                    Write-Log -Level Verbose -Message 'Sleeping 5 second'
                     Start-Sleep -Seconds 5
                 }
             } until ($Finished -eq $true)   

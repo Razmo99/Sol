@@ -30,19 +30,19 @@ function Resolve-AutoMemberOf{
         [Parameter(Mandatory=$false)][String]$M365License=''
     )
     [HashTable]$Results=@{}
-    Write-Verbose('Processing AutoMemberOf entries')
+    Write-Log -Level Verbose -Message 'Processing AutoMemberOf entries'
     # Iterate over all AutoMember Items
     foreach ($key in $AutoMemberOf.keys) {
         # If this item doesn have requirements add it to the results
         if(!$AutoMemberOf.$key.Requirements){
-            Write-Verbose($key+': Criteria Met')
+            Write-Log -Level Verbose -Message '{0}: Criteria Met' -Arguments $key
             [void] $Results.Add($key,$AutoMemberOf[$Key])
         }elseif($AutoMemberOf.$key.Requirements){
             $CriterialMet=$true
             if(!$FileServerAccess){
                 # If item FileServerAccess is False Criteria not met
                 if($AutoMemberOf.$key.Requirements.FileServerAccess -eq $true){
-                    Write-Verbose($key+': Criterial Failed | File Server Access')
+                    Write-Log -Level Verbose -Message '{0}: Criterial Failed | File Server Access' -Arguments $key
                     $CriterialMet = $false
                 }
             # If the item has M365License AND user has M365License
@@ -50,7 +50,7 @@ function Resolve-AutoMemberOf{
             if($AutoMemberOf.$key.Requirements.M365License){
                 # If the License is not within the M365 Array Criteria not met
                 if(($AutoMemberOf.$key.Requirements.M365License -notcontains $M365License) -and !($AutoMemberOf.$key.Requirements.M365License -contains 'Any')){
-                    Write-Verbose($key+': Criterial Failed | Microsoft 365 License')
+                    Write-Log -Level Verbose -Message '{0}: Criterial Failed | Microsoft 365 License' -Arguments $key
                     $CriterialMet=$false
                 }       
             }
@@ -60,14 +60,14 @@ function Resolve-AutoMemberOf{
                 foreach ($req in $AutoMemberOf.$key.Requirements.prompts) {
                     # If the Interactive Prompts does not contain this item Criteria not met
                     if($InteractivePromptAnswers.keys -notcontains $req){
-                        Write-Verbose($key+': Criterial Failed | Missing req: '+$req)
+                        Write-Log -Level Verbose -Message '{0}: Criterial Failed | Missing req: {1}' -Arguments @($key, $req)
                         $CriterialMet=$false                        
                     }
                 }                    
             }
             # Add the item to the results to be returned
             if($CriterialMet){
-                Write-Verbose($key+': Criteria Met')
+                Write-Log -Level Verbose -Message '{0}: Criteria Met' -Arguments $key
                 [void] $Results.Add($key,$AutoMemberOf[$Key])
             }
         }

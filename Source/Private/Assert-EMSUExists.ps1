@@ -35,7 +35,7 @@ function Assert-EMSUExists {
         if ($Credential) {$SplatImportEMS.Add("Credential",$Credential)}
         if(!$WhatIfPreference){
             if (!(Import-EMS @SplatImportEMS -whatif:$false)) {
-                Write-Error -Message 'No EMS Connection'
+                Write-Log -Level Error -Message 'No EMS Connection'
                 return
             }
         }
@@ -44,10 +44,10 @@ function Assert-EMSUExists {
         if ($PSCmdlet.ShouldProcess($SamAccountName, 'Get-RemoteMailbox')) {
         #Test if the provided person already exists on Exchange
             [bool]$GetRM = Get-RemoteMailbox $SamAccountName -ErrorAction SilentlyContinue
-            if($GetRM){ Write-Verbose($SamAccountName + ' already has a mailbox in Exchange') 
+            if($GetRM){ Write-Log -Level Verbose -Message '{0} already has a mailbox in Exchange' -Arguments $SamAccountName
             return $true
             }else {
-                Write-Verbose ('User '+$SamAccountName+' could not be found in Exchange')
+                Write-Log -Level Verbose -Message 'User {0} could not be found in Exchange' -Arguments $SamAccountName
                 return $false
             }
         }

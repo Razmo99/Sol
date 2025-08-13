@@ -22,7 +22,7 @@ function Test-PromptM365AndFileServerAccess {
         [Parameter(Mandatory=$false)][boolean]$FileServerAccess=$false,
         [Parameter(Mandatory=$false)][String]$M365License=''
     )
-    Write-Verbose('Processing prompts without Requirements on other prompts')
+    Write-Log -Level Verbose -Message 'Processing prompts without Requirements on other prompts'
     [HashTable]$Results=@{}
     # Iterate over all DPrompts with Requirements
     foreach ($key in $Prompts.keys) {     
@@ -32,7 +32,7 @@ function Test-PromptM365AndFileServerAccess {
         if(!$FileServerAccess){
             # If promp FileServerAccess is False Criteria not met
             if($Prompts.$key.Requirements.FileServerAccess -eq $true){
-                Write-Verbose($key+': Criterial Failed: '+'File Server Access')
+                Write-Log -Level Verbose -Message '{0}: Criterial Failed: File Server Access' -Arguments $key
                 $CriterialMet = $false
             }
         # If the Prompt has M365License AND user has M365License
@@ -40,7 +40,7 @@ function Test-PromptM365AndFileServerAccess {
         if($Prompts.$key.Requirements.M365License){
             # If the License is not within the M365 Array Criteria not met
             if(($Prompts.$key.Requirements.M365License -notcontains $M365License) -and !($Prompts.$key.Requirements.M365License -contains 'Any')){
-                Write-Verbose($key+': Criterial Failed: '+'Microsoft 365 License')
+                Write-Log -Level Verbose -Message '{0}: Criterial Failed: Microsoft 365 License' -Arguments $key
                 $CriterialMet=$false
             }       
         } 

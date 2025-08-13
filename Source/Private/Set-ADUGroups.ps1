@@ -38,9 +38,9 @@ function Set-ADUGroups {
     Begin{}
     Process{
         #Let the console know what we are doing
-        Write-Verbose($Identity+' will be added to the below groups')
-        $Groups | ForEach-Object {Write-Verbose($_)}
-        Write-Verbose('Trying to Set AD Groups for user; '+$Identity)
+        Write-Log -Level Verbose -Message '{0} will be added to the below groups' -Arguments $Identity
+        $Groups | ForEach-Object {Write-Log -Level Verbose -Message $_}
+        Write-Log -Level Verbose -Message 'Trying to Set AD Groups for user; {0}' -Arguments $Identity
         #Splat for Get AD Users Groups
         [HashTable]$SplatGetADPrince = @{
             Server = $Server
@@ -55,7 +55,7 @@ function Set-ADUGroups {
             ErrorAction = 'Stop'
         }
         if($Credential){
-            Write-Verbose('Admin credentials provided.')
+            Write-Log -Level Verbose -Message 'Admin credentials provided.'
             $SplatSetADPrince.Add('Credential',$Credential)
             $SplatGetADPrince.Add('Credential',$Credential)
         }
@@ -74,35 +74,35 @@ function Set-ADUGroups {
                     $Finished=$false
                     try {
                         if (!(Get-ADPrincipalGroupMembership @SplatGetADPrince | Select-Object SamAccountName | Where-Object -Property SamAccountName -Value $Group -EQ)) {
-                            Write-Verbose('User is not a memberof "'+$Group+'" procceding to add them. ')
+                            Write-Log -Level Verbose -Message 'User is not a memberof "{0}" procceding to add them. ' -Arguments $Group
                             try {
                                     Add-ADPrincipalGroupMembership @SplatSetADPrince
-                                    Write-Verbose('Successfully Added user; '+$Identity+' To Group; '+$Group)
+                                    Write-Log -Level Verbose -Message 'Successfully Added user; {0} To Group; {1}' -Arguments @($Identity, $Group)
                                 $Results.MemberOf += [PSCustomObject]@{
                                     SamAccountName=$Group
                                     Result=$True
                                 }
                                 $Finished=$true                 
                             }catch [System.Management.Automation.MethodException]{
-                                Write-Error('Provided credentials have insufficient permissions to change user groups')
+                                Write-Log -Level Error -Message 'Provided credentials have insufficient permissions to change user groups'
                                 $Results.MemberOf += [PSCustomObject]@{
                                     SamAccountName=$Group
                                     Result=$False
                                 }
                                 break
                             }catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException]{
-                                Write-Error("Cannot Find "+$Group+" Skipping")
+                                Write-Log -Level Error -Message 'Cannot Find {0} Skipping' -Arguments $Group
                                 $Results.MemberOf += [PSCustomObject]@{
                                     SamAccountName=$Group
                                     Result=$False
                                 }
                                 $Finished=$true
                             }catch {
-                                Write-Error($_.Exception.Message)
+                                Write-Log -Level Error -Message $_.Exception.Message -ExceptionInfo $_
                                 break
                             }
                         }else{
-                            Write-Verbose('User is already a MemberOf '+$Group+' Skipping')
+                            Write-Log -Level Verbose -Message 'User is already a MemberOf {0} Skipping' -Arguments $Group
                             $Results.MemberOf += [PSCustomObject]@{
                                 SamAccountName=$Group
                                 Result=$True
@@ -110,25 +110,25 @@ function Set-ADUGroups {
                             $Finished=$true
                         }
                     }catch [Microsoft.ActiveDirectory.Management.ADException]{
-                        Write-Warning('Provided credentials have insufficient permissions to change user groups')
+                        Write-Log -Level Warning -Message 'Provided credentials have insufficient permissions to change user groups'
                         break
                     }catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException]{
                         $Finished=$false
-                        Write-Verbose('User Not Found | Sleeping')
+                        Write-Log -Level Verbose -Message 'User Not Found | Sleeping'
                         Start-Sleep 3
                     }catch{
-                        write-error($_.Exception.Message)
+                        Write-Log -Level Error -Message $_.Exception.Message -ExceptionInfo $_
                         break
                     }
                     if($TimeNow -ge $TimeEnd){
                         $Finished = $true
-                        Write-Warning('Searched for 30 seconds Exiting.')
+                        Write-Log -Level Warning -Message 'Searched for 30 seconds Exiting.'
                     }
                 } until ($Finished)
             }
         }
         if($Results.MemberOf){
-            Write-Verbose('Returning Results')
+            Write-Log -Level Verbose -Message 'Returning Results'
             [PSCustomObject]$Results
         }
     }
