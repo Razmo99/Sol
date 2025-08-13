@@ -41,9 +41,9 @@ Credentials will be prompted for if found to be invalid, or if MFA is enabled on
 Alternatively just place the module in the same folder as the execution script and use `Import-Module`
 ## Requirements
 ~~~powershell
-#Requires  -module ActiveDirectory
-#Requires  -module AzureAD
-#Requires  -module MSOnline
+
+
+
 ~~~
 
 # Usage

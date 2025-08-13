@@ -9,7 +9,7 @@
 @{
 
 # Script module or binary module file associated with this manifest.
-RootModule = 'Sol.psm1'
+RootModule = 'sol.psm1'
 
 # Version number of this module.
 ModuleVersion = '0.8'
@@ -21,13 +21,13 @@ ModuleVersion = '0.8'
 GUID = 'b33b0016-dab2-4941-990e-d2a6f09e0b57'
 
 # Author of this module
-Author = 'Lewis Munro'
+Author = 'razmo99'
 
 # Company or vendor of this module
 CompanyName = 'N/A'
 
 # Copyright statement for this module
-Copyright = '(c) 2020 Lewis Munro. All rights reserved.'
+Copyright = '(c) 2025 razmo99. All rights reserved.'
 
 # Description of the functionality provided by this module
 # Description = 'Series of handy commands to be referenced'
@@ -51,7 +51,12 @@ Copyright = '(c) 2020 Lewis Munro. All rights reserved.'
 # ProcessorArchitecture = 'x64'
 
 # Modules that must be imported into the global environment prior to importing this module
-# RequiredModules = @()
+RequiredModules = @(
+    @{
+        ModuleName = 'Logging'
+        ModuleVersion = '4.8.5'
+    }
+)
 
 # Assemblies that must be loaded prior to importing this module
 # RequiredAssemblies = @()
@@ -69,30 +74,7 @@ Copyright = '(c) 2020 Lewis Munro. All rights reserved.'
 # NestedModules = @()
 
 # Functions to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no functions to export.
-FunctionsToExport = @('Test-AADConnected',
-'Set-AADULicense',
-'Get-AADULicense',
-'Assert-ADUExists',
-'Assert-AADUExists',
-'Assert-EMSUExists',
-'Import-EMS',
-'Assert-SufficientPermission',
-'Test-MSolConnected',
-'Set-MSolUMFA',
-'Sync-Directories',
-'Wait-AADUSynced',
-'Wait-ADUSynced',
-'Read-UserConfirm',
-'Set-ADUGroups',
-'Start-Logging',
-'Test-UserContinue',
-'Show-CompanyBranches',
-'New-CompanyUser',
-'Test-InteractivePrompts',
-'Assert-ADPermission',
-'Assert-ADSyncPermission',
-'Assert-AADPermission',
-'Assert-MsolPermission')
+FunctionsToExport = @()
 
 # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
 CmdletsToExport = @()
@@ -130,7 +112,7 @@ PrivateData = @{
         # IconUri = ''
 
         # ReleaseNotes of this module
-        # ReleaseNotes = ''
+        ReleaseNotes = ''
 
     } # End of PSData hashtable
 
