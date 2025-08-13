@@ -15,43 +15,46 @@ function Wait-ADUSynced {
         system.boolean
         returns one or more booleans
     #>
-    [cmdletbinding(SupportsShouldProcess=$true)]
+    [cmdletbinding(SupportsShouldProcess = $true)]
+    [OutputType([Boolean])]
     param (
-        [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)][string]$SamAccountName,
-        [Parameter(Mandatory=$true)][String]$Server,
-        [Parameter(Mandatory=$false)][pscredential]$Credential
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)][string]$SamAccountName,
+        [Parameter(Mandatory = $true)][String]$Server,
+        [Parameter(Mandatory = $false)][pscredential]$Credential
     )
-    Begin{}
-    Process{
+    Begin {}
+    Process {
         #Hash table for the assert user function.
-        [HashTable]$SplatUserExists= @{
+        [HashTable]$SplatUserExists = @{
             SamAccountName = $SamAccountName
-            Server = $Server
-            ErrorAction = 'SilentlyContinue'
+            Server         = $Server
+            ErrorAction    = 'SilentlyContinue'
         }
         #If Credentials add them to the splat
-        if($Credentials){$SplatUserExists.Add('Credential',$Credential)}
-    
+        if ($Credentials) { $SplatUserExists.Add('Credential', $Credential) }
+
         $TimeStart = Get-Date
         $TimeEnd = $timeStart.addminutes(1)
-        $Finished=$false
+        $Finished = $false
         if ($PSCmdlet.ShouldProcess($SamAccountName, "Check UserSynced")) {
             do {
                 $TimeNow = Get-Date
                 if (Assert-ADUExists @SplatUserExists) {
                     $Finished = $true
-                    Write-Log -Level Verbose -Message 'Found {0} In AD' -Arguments $SamAccountName
+                    Write-Log -Level Debug -Message 'Found {0} In AD' -Arguments $SamAccountName
                     return $true
-                }elseif($TimeNow -ge $TimeEnd){
+                }
+                elseif ($TimeNow -ge $TimeEnd) {
                     $Finished = $true
                     Write-Log -Level Warning -Message 'Searched for 1 minute Exiting...'
                     return $false
-                }else {
-                    Write-Log -Level Verbose -Message 'Sleeping 5 second'
+                }
+                else {
+                    Write-Log -Level Debug -Message 'Sleeping 5 second'
                     Start-Sleep -Seconds 5
                 }
-            } until ($Finished -eq $true)            
+            } until ($Finished -eq $true)
         }
     }
-    End{}
+    End {}
 }

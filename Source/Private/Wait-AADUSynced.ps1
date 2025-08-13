@@ -15,34 +15,37 @@ function Wait-AADUSynced {
         system.boolean
         returns one or more booleans
     #>
-    [cmdletbinding(SupportsShouldProcess=$true)]
+    [cmdletbinding(SupportsShouldProcess = $true)]
+    [OutputType([Boolean])]
     param (
-        [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)][string]$UserPrincipalName
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)][string]$UserPrincipalName
     )
-    Begin{}
-    Process{
+    Begin {}
+    Process {
         $TimeStart = Get-Date
         $TimeEnd = $timeStart.addminutes(2)
-        $Finished=$false
+        $Finished = $false
         if ($PSCmdlet.ShouldProcess($UserPrincipalName, "Check UserSynced")) {
             do {
                 $TimeNow = Get-Date
                 if (Assert-AADUExists -UserPrincipalName $UserPrincipalName) {
                     $Finished = $true
-                    Write-Log -Level Verbose -Message 'Found {0} In AzureAD' -Arguments $UserPrincipalName
+                    Write-Log -Level Debug -Message 'Found {0} In AzureAD' -Arguments $UserPrincipalName
                     return $true
-                }elseif($TimeNow -ge $TimeEnd){
+                }
+                elseif ($TimeNow -ge $TimeEnd) {
                     $Finished = $true
                     Write-Log -Level Warning -Message 'Searched for 2 minute Exiting...'
                     Write-Log -Level Warning -Message 'Failed to confirm AzureAD Connection'
                     Write-Log -Level Error -Message 'User Creation will no continue past this point'
                     return $false
-                }else {
-                    Write-Log -Level Verbose -Message 'Sleeping 5 second'
+                }
+                else {
+                    Write-Log -Level Debug -Message 'Sleeping 5 second'
                     Start-Sleep -Seconds 5
                 }
-            } until ($Finished -eq $true)   
+            } until ($Finished -eq $true)
         }
     }
-    End{}
+    End {}
 }

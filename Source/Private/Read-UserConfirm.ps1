@@ -1,4 +1,4 @@
-function Read-UserConfirm{
+function Read-UserConfirm {
     <#
     .SYNOPSIS
     Prompts user to continue
@@ -14,18 +14,21 @@ function Read-UserConfirm{
         system.boolean
     #>
     [CmdletBinding()]
+    [OutputType([Boolean])]
     param (
-        [Parameter(Mandatory=$false)][String]$Message
+        [Parameter(Mandatory = $false)][String]$Message
     )
     if ($Message) {
         $response = read-host $Message
-    }else{
-    $response = read-host 'Press enter to confirm; or any other key (and then enter) to exit'
+    }
+    else {
+        $response = read-host 'Press enter to confirm; or any other key (and then enter) to exit'
     }
     $aborted = ! [bool]$response
-    if(!$aborted){
+    if (!$aborted) {
         return $false
-    }else{
+    }
+    else {
         return $true
     }
 }

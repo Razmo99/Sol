@@ -4,12 +4,12 @@ param(
 )
 
 $buildParams = @{
-    Path                      = $SourcePath
-    OutputDirectory           = $OutputDirectory
+    Path                       = $SourcePath
+    OutputDirectory            = $OutputDirectory
     UnversionedOutputDirectory = $true
-    Passthru                  = $true
-    Suffix = "./build.suffix.ps1"
-    Prefix = "./build.prefix.ps1"
+    Passthru                   = $true
+    Suffix                     = "./build.suffix.ps1"
+    Prefix                     = "./build.prefix.ps1"
 
 }
 

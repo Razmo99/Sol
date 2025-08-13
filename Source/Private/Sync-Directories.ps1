@@ -1,4 +1,4 @@
-function Sync-Directories{
+function Sync-Directory {
     <#
     .SYNOPSIS
     Sync AD or AAD with each other
@@ -19,70 +19,77 @@ function Sync-Directories{
         system.boolean
         returns one or more booleans
     #>
-    [CmdletBinding(SupportsShouldProcess=$true)]
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    [OutputType([Boolean])]
     param (
-        [Parameter(Position=0,Mandatory=$false)][pscredential]$Credential,
-        [Parameter(Mandatory=$true)][string]$Server,
+        [Parameter(Position = 0, Mandatory = $false)][pscredential]$Credential,
+        [Parameter(Mandatory = $true)][string]$Server,
         [switch]$AzureActiveDirectory,
         [switch]$ActiveDirectory
     )
     if (!$WhatIfPreference) {
         if (!$Credential) {
-            $Credential = Get-Credential -Message ('Enter Credentials for '+$Server)
+            $Credential = Get-Credential -Message ('Enter Credentials for ' + $Server)
             if (!$Credential) {
                 return Write-Log -Level Error -Message 'No Credentials Provided'
             }
         }
     }
-    if($ActiveDirectory) {
+    if ($ActiveDirectory) {
         $ADReplicate = {
             $DCSession = New-PSSession -ComputerName $Server -Credential $Credential
-            Invoke-Command -Session $DCSession -ScriptBlock { 
+            Invoke-Command -Session $DCSession -ScriptBlock {
                 Import-Module -Name 'ActiveDirectory'
-                Write-Output ('Syncing all DC held on '+$Server)
+                Write-Output ('Syncing all DC held on ' + $using:Server)
                 repadmin.exe /syncall /AdeP | Out-Null
                 Write-Output 'SyncAll Completed'
             }
             Remove-PSSession $DCSession
         }
-        Write-Log -Level Verbose -Message 'Syncing Domain Controllers'
+        Write-Log -Level Debug -Message 'Syncing Domain Controllers'
         if ($PSCmdlet.ShouldProcess($Server, "repadmin.exe /syncall /AdeP")) {
-            if((Invoke-Command $ADReplicate -ErrorAction Stop).Result -eq 'Success'){
+            if ((Invoke-Command $ADReplicate -ErrorAction Stop).Result -eq 'Success') {
                 return $true
-            }else{
+            }
+            else {
                 return $false
-            }    
+            }
         }
-    }elseif($AzureActiveDirectory){
+    }
+    elseif ($AzureActiveDirectory) {
         $AADConnectSync = {
             $AADConnectSession = New-PSSession -ComputerName $Server -Credential $Credential
             Invoke-Command -Session $AADConnectSession -ScriptBlock {
-                $VerbosePreference='Continue'
-                Import-Module -Name 'ADSync' -Function Get-ADSyncConnectorRunStatus,Start-ADSyncSyncCycle
+                $VerbosePreference = 'Continue'
+                Import-Module -Name 'ADSync' -Function Get-ADSyncConnectorRunStatus, Start-ADSyncSyncCycle
                 $TimeStart = Get-Date
                 $TimeEnd = $timeStart.addminutes(2)
-                $Finished=$false
+                $Finished = $false
                 do {
                     $TimeNow = Get-Date
                     if (!(Get-ADSyncConnectorRunStatus)) {
-                        try{
+                        try {
                             Start-ADSyncSyncCycle -PolicyType Delta -ErrorAction Stop
                             $Finished = $true
                             return $true
-                        }catch [System.Management.Automation.RuntimeException]{
-                            Write-Log -Level Verbose -Message 'Sync is already running. Cannot start a new run till this one completes.'
-                            $Finished = $false
-                        }catch{
-                            Write-Log -Level Verbose -Message $_.Exception.Message -ExceptionInfo $_
                         }
-                    }elseif($TimeNow -ge $TimeEnd){
+                        catch [System.Management.Automation.RuntimeException] {
+                            Write-Log -Level Debug -Message 'Sync is already running. Cannot start a new run till this one completes.'
+                            $Finished = $false
+                        }
+                        catch {
+                            Write-Log -Level Debug -Message $_.Exception.Message -ExceptionInfo $_
+                        }
+                    }
+                    elseif ($TimeNow -ge $TimeEnd) {
                         $Finished = $true
                         Write-Log -Level Warning -Message 'Searched for 2 minute Exiting...'
                         Write-Log -Level Warning -Message 'Azure AD is still Busy.'
                         Write-Log -Level Error -Message 'User Creation will no continue past this point'
                         return $false
-                    }else {
-                        Write-Log -Level Verbose -Message 'Sleeping 10 second'
+                    }
+                    else {
+                        Write-Log -Level Debug -Message 'Sleeping 10 second'
                         Start-Sleep -Seconds 10
                     }
                 } until ($Finished -eq $true)
@@ -90,19 +97,22 @@ function Sync-Directories{
             Remove-PSSession $AADConnectSession
         }
         if ($PSCmdlet.ShouldProcess($Server, "Start-ADSyncSyncCycle -PolicyType Delta")) {
-            Write-Log -Level Verbose -Message 'Syncing ADConnect'
+            Write-Log -Level Debug -Message 'Syncing ADConnect'
             $PSIResult = Invoke-Command $AADConnectSync -ErrorAction Stop
             if ($PSIResult) {
                 return $true
-            }else{
+            }
+            else {
                 return $false
             }
 
         }
 
-    }elseif(!$AzureActiveDirectory -and !$ActiveDirectory) {
+    }
+    elseif (!$AzureActiveDirectory -and !$ActiveDirectory) {
         return Write-Log -Level Error -Message 'No System switch specified'
-    }else{
+    }
+    else {
         return $false
     }
 }

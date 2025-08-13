@@ -1,4 +1,4 @@
-function Initialize-Logging{
+function Initialize-Logging {
     <#
     .SYNOPSIS
         Configures the centralized logging module.
@@ -20,17 +20,17 @@ function Initialize-Logging{
     #>
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory=$true)][string]$LogFilePath,
-        [Parameter(Mandatory=$true)][string]$LogFileNamePrefix,
-        [Parameter(Mandatory=$false)][int]$MaxLogFileSizeMB = 10,
-        [Parameter(Mandatory=$false)][int]$MaxLogFiles = 5
+        [Parameter(Mandatory = $true)][string]$LogFilePath,
+        [Parameter(Mandatory = $true)][string]$LogFileNamePrefix,
+        [Parameter(Mandatory = $false)][int]$MaxLogFileSizeMB = 10,
+        [Parameter(Mandatory = $false)][int]$MaxLogFiles = 5
     )
 
     # Define common colors for both targets
     $LogColors = @{
-        Debug = 'Cyan'
-        Warning = 'Yellow'
-        Error = 'Red'
+        Debug       = 'Cyan'
+        Warning     = 'Yellow'
+        Error       = 'Red'
         Information = 'Green'
     }
 

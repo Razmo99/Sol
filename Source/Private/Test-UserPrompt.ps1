@@ -1,14 +1,15 @@
-function Test-UserPrompt {
+﻿function Test-UserPrompt {
     param (
-        [Parameter(Mandatory=$true)][String]$Message,
-        [Parameter(Mandatory=$false)][boolean]$Inverse=$false
+        [Parameter(Mandatory = $true)][String]$Message,
+        [Parameter(Mandatory = $false)][boolean]$Inverse = $false
     )
     # If prompt is inverse (!)bang it
-    if($Inverse){
+    if ($Inverse) {
         $TestUser = !(Test-UserContinue -Message $Message)
-    # else normal
-    }else{
+        # else normal
+    }
+    else {
         $TestUser = Test-UserContinue -Message $Message
     }
-    return $TestUser      
+    return $TestUser
 }

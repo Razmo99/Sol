@@ -1,4 +1,4 @@
-function Test-MSolConnected {
+﻿function Test-MSolConnected {
     <#
     .SYNOPSIS
     Checks if a connection to Msol is Present
@@ -11,8 +11,9 @@ function Test-MSolConnected {
     #>
     try {
         Get-MsolCompanyInformation -ErrorAction Stop | Out-Null
-        return $true         
-    }catch {
+        return $true
+    }
+    catch {
         return $false
     }
 }

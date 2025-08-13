@@ -15,57 +15,59 @@ function Assert-AADPermission {
     .OUTPUTS
         system.boolean
     #>
-    
-    [CmdletBinding(SupportsShouldProcess=$true)]
+
+    [CmdletBinding()]
     param (
-        [Parameter(Mandatory=$false,ValueFromPipelineByPropertyName=$true)][System.Collections.ArrayList]$AADRoles=@(),
-        [Parameter(Mandatory=$false)][String]$UserPrincipalName
+        [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName = $true)][System.Collections.ArrayList]$AADRoles = @(),
+        [Parameter(Mandatory = $false)][String]$UserPrincipalName
 
     )
-    Begin{
-        
-        [Hashtable]$SplatTestAADConnected=@{
-            verbose = $false
+    Begin {
+
+        [Hashtable]$SplatTestAADConnected = @{
+            verbose      = $false
             NoPermission = $true
         }
         if ($UserPrincipalName) {
-            $SplatTestAADConnected.Add('UserPrincipalName',$UserPrincipalName)
+            $SplatTestAADConnected.Add('UserPrincipalName', $UserPrincipalName)
         }
-        $null =  Test-AADConnected @SplatTestAADConnected
+        $null = Test-AADConnected @SplatTestAADConnected
     }
-    Process{
-        if($AADRoles -notcontains 'Global Administrator'){
+    Process {
+        if ($AADRoles -notcontains 'Global Administrator') {
             [void] $AADRoles.Add('Global Administrator')
         }
         # Get the UserPrincipalName of any active AzureAD Sessions
         # Return only the first result.
         # This is just incase the user has multiple sessions open with differenet accounts
-        if(!$UserPrincipalName){
+        if (!$UserPrincipalName) {
             $AADCurrentSessionInfo = (Get-AzureADCurrentSessionInfo -ErrorAction Stop).Account.id | Select-Object -First 1
-        }else{
+        }
+        else {
             $AADCurrentSessionInfo = $UserPrincipalName
         }
         #Get all AzureAD Roles
-        $AADDirectoryCurrentUserRoles = Get-AzureADUserMembership -ObjectId $AADCurrentSessionInfo -All $true | Where-Object { $_.ObjectType -eq "Role"}
-        $result=$false
+        $AADDirectoryCurrentUserRoles = Get-AzureADUserMembership -ObjectId $AADCurrentSessionInfo -All $true | Where-Object { $_.ObjectType -eq "Role" }
+        $result = $false
         #Iterate over all the AzureAD Roles
         foreach ($AADRole in $AADRoles) {
             #Check first if we got any returned roles
-            if($AADDirectoryCurrentUserRoles.DisplayName){
+            if ($AADDirectoryCurrentUserRoles.DisplayName) {
                 # Check for a match
-                if($AADDirectoryCurrentUserRoles.DisplayName.Contains($AADRole)){
-                    $result=$true
-                    Write-Log -Level Verbose -Message '{0} has AzureAD role {1} assigned' -Arguments @($AADCurrentSessionInfo, $AADRole)
+                if ($AADDirectoryCurrentUserRoles.DisplayName.Contains($AADRole)) {
+                    $result = $true
+                    Write-Log -Level Debug -Message '{0} has AzureAD role {1} assigned' -Arguments @($AADCurrentSessionInfo, $AADRole)
                 }
             }
         }
-        if(!$result){
+        if (!$result) {
             Write-Log -Level Warning -Message 'Insufficient AzureAD permissions'
             return $result
-        }else{
-            Write-Log -Level Verbose -Message '{0} has sufficient AzureAD permissions' -Arguments $AADCurrentSessionInfo
+        }
+        else {
+            Write-Log -Level Debug -Message '{0} has sufficient AzureAD permissions' -Arguments $AADCurrentSessionInfo
             return $result
         }
     }
-    End{}
+    End {}
 }

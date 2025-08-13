@@ -1,4 +1,4 @@
-function Set-ADUGroups {
+﻿function Set-ADUGroup {
     <#
     .SYNOPSIS
     Adds the user to the specific groups
@@ -27,110 +27,117 @@ function Set-ADUGroups {
             Result of the command Boolean
         Identity the same Identity that was input to the function
     #>
-    
-    [cmdletbinding(SupportsShouldProcess=$true)]
-    param (        
-        [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)][String]$Identity,
-        [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)][Array]$Groups,
-        [Parameter(Mandatory=$true)][String]$Server,
-        [Parameter(Mandatory=$false)][pscredential]$Credential
+
+    [cmdletbinding(SupportsShouldProcess = $true)]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)][String]$Identity,
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)][Array]$Groups,
+        [Parameter(Mandatory = $true)][String]$Server,
+        [Parameter(Mandatory = $false)][pscredential]$Credential
     )
-    Begin{}
-    Process{
+    Begin {}
+    Process {
         #Let the console know what we are doing
-        Write-Log -Level Verbose -Message '{0} will be added to the below groups' -Arguments $Identity
-        $Groups | ForEach-Object {Write-Log -Level Verbose -Message $_}
-        Write-Log -Level Verbose -Message 'Trying to Set AD Groups for user; {0}' -Arguments $Identity
+        Write-Log -Level Debug -Message '{0} will be added to the below groups' -Arguments $Identity
+        $Groups | ForEach-Object { Write-Log -Level Debug -Message $_ }
+        Write-Log -Level Debug -Message 'Trying to Set AD Groups for user; {0}' -Arguments $Identity
         #Splat for Get AD Users Groups
         [HashTable]$SplatGetADPrince = @{
-            Server = $Server
-            Identity = $Identity
+            Server      = $Server
+            Identity    = $Identity
             ErrorAction = 'Stop'
         }
         #Splat for Set AD User Groups
         [HashTable]$SplatSetADPrince = @{
-            Server = $Server
-            Identity = $Identity
-            Memberof = ''
+            Server      = $Server
+            Identity    = $Identity
+            Memberof    = ''
             ErrorAction = 'Stop'
         }
-        if($Credential){
-            Write-Log -Level Verbose -Message 'Admin credentials provided.'
-            $SplatSetADPrince.Add('Credential',$Credential)
-            $SplatGetADPrince.Add('Credential',$Credential)
+        if ($Credential) {
+            Write-Log -Level Debug -Message 'Admin credentials provided.'
+            $SplatSetADPrince.Add('Credential', $Credential)
+            $SplatGetADPrince.Add('Credential', $Credential)
         }
-        [PSCustomObject]$Results=@{
-            Identity=$Identity
-            MemberOf=@()
+        [PSCustomObject]$Results = @{
+            Identity = $Identity
+            MemberOf = @()
         }
         # Finally do a loop to add each group to the user writing output to the console
-        foreach($Group in $Groups){
+        foreach ($Group in $Groups) {
             $TimeStart = Get-Date
             $TimeEnd = $timeStart.addminutes(0.5)
-            $SplatSetADPrince['Memberof']=$Group
-            if ($PSCmdlet.ShouldProcess($Identity, 'Add-ADPrincipalGroupMembership -MemberOf "'+$Group)) {
+            $SplatSetADPrince['Memberof'] = $Group
+            if ($PSCmdlet.ShouldProcess($Identity, 'Add-ADPrincipalGroupMembership -MemberOf "' + $Group)) {
                 do {
                     $TimeNow = Get-Date
-                    $Finished=$false
+                    $Finished = $false
                     try {
                         if (!(Get-ADPrincipalGroupMembership @SplatGetADPrince | Select-Object SamAccountName | Where-Object -Property SamAccountName -Value $Group -EQ)) {
-                            Write-Log -Level Verbose -Message 'User is not a memberof "{0}" procceding to add them. ' -Arguments $Group
+                            Write-Log -Level Debug -Message 'User is not a memberof "{0}" procceding to add them. ' -Arguments $Group
                             try {
-                                    Add-ADPrincipalGroupMembership @SplatSetADPrince
-                                    Write-Log -Level Verbose -Message 'Successfully Added user; {0} To Group; {1}' -Arguments @($Identity, $Group)
+                                Add-ADPrincipalGroupMembership @SplatSetADPrince
+                                Write-Log -Level Debug -Message 'Successfully Added user; {0} To Group; {1}' -Arguments @($Identity, $Group)
                                 $Results.MemberOf += [PSCustomObject]@{
-                                    SamAccountName=$Group
-                                    Result=$True
+                                    SamAccountName = $Group
+                                    Result         = $True
                                 }
-                                $Finished=$true                 
-                            }catch [System.Management.Automation.MethodException]{
+                                $Finished = $true
+                            }
+                            catch [System.Management.Automation.MethodException] {
                                 Write-Log -Level Error -Message 'Provided credentials have insufficient permissions to change user groups'
                                 $Results.MemberOf += [PSCustomObject]@{
-                                    SamAccountName=$Group
-                                    Result=$False
+                                    SamAccountName = $Group
+                                    Result         = $False
                                 }
                                 break
-                            }catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException]{
+                            }
+                            catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
                                 Write-Log -Level Error -Message 'Cannot Find {0} Skipping' -Arguments $Group
                                 $Results.MemberOf += [PSCustomObject]@{
-                                    SamAccountName=$Group
-                                    Result=$False
+                                    SamAccountName = $Group
+                                    Result         = $False
                                 }
-                                $Finished=$true
-                            }catch {
+                                $Finished = $true
+                            }
+                            catch {
                                 Write-Log -Level Error -Message $_.Exception.Message -ExceptionInfo $_
                                 break
                             }
-                        }else{
-                            Write-Log -Level Verbose -Message 'User is already a MemberOf {0} Skipping' -Arguments $Group
-                            $Results.MemberOf += [PSCustomObject]@{
-                                SamAccountName=$Group
-                                Result=$True
-                            }
-                            $Finished=$true
                         }
-                    }catch [Microsoft.ActiveDirectory.Management.ADException]{
+                        else {
+                            Write-Log -Level Debug -Message 'User is already a MemberOf {0} Skipping' -Arguments $Group
+                            $Results.MemberOf += [PSCustomObject]@{
+                                SamAccountName = $Group
+                                Result         = $True
+                            }
+                            $Finished = $true
+                        }
+                    }
+                    catch [Microsoft.ActiveDirectory.Management.ADException] {
                         Write-Log -Level Warning -Message 'Provided credentials have insufficient permissions to change user groups'
                         break
-                    }catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException]{
-                        $Finished=$false
-                        Write-Log -Level Verbose -Message 'User Not Found | Sleeping'
+                    }
+                    catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
+                        $Finished = $false
+                        Write-Log -Level Debug -Message 'User Not Found | Sleeping'
                         Start-Sleep 3
-                    }catch{
+                    }
+                    catch {
                         Write-Log -Level Error -Message $_.Exception.Message -ExceptionInfo $_
                         break
                     }
-                    if($TimeNow -ge $TimeEnd){
+                    if ($TimeNow -ge $TimeEnd) {
                         $Finished = $true
                         Write-Log -Level Warning -Message 'Searched for 30 seconds Exiting.'
                     }
                 } until ($Finished)
             }
         }
-        if($Results.MemberOf){
-            Write-Log -Level Verbose -Message 'Returning Results'
+        if ($Results.MemberOf) {
+            Write-Log -Level Debug -Message 'Returning Results'
             [PSCustomObject]$Results
         }
     }
-    End{}
+    End {}
 }
