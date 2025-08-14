@@ -1,7 +1,7 @@
 function Sync-Directory {
     <#
     .SYNOPSIS
-    Sync AD or AAD with each other
+    Sync AD or Microsoft Graph with each other
     .DESCRIPTION
     Can sync all domain controllers in a forest, Can also start a delta sync on Azure Active Directory Connector
     .PARAMETER Credentials
@@ -24,7 +24,7 @@ function Sync-Directory {
     param (
         [Parameter(Position = 0, Mandatory = $false)][pscredential]$Credential,
         [Parameter(Mandatory = $true)][string]$Server,
-        [switch]$AzureActiveDirectory,
+        [switch]$EntraID,
         [switch]$ActiveDirectory
     )
     if (!$WhatIfPreference) {
@@ -56,10 +56,10 @@ function Sync-Directory {
             }
         }
     }
-    elseif ($AzureActiveDirectory) {
-        $AADConnectSync = {
-            $AADConnectSession = New-PSSession -ComputerName $Server -Credential $Credential
-            Invoke-Command -Session $AADConnectSession -ScriptBlock {
+    elseif ($EntraID) {
+        $EntraIDSync = {
+            $EntraIDSession = New-PSSession -ComputerName $Server -Credential $Credential
+            Invoke-Command -Session $EntraIDSession -ScriptBlock {
                 $VerbosePreference = 'Continue'
                 Import-Module -Name 'ADSync' -Function Get-ADSyncConnectorRunStatus, Start-ADSyncSyncCycle
                 $TimeStart = Get-Date
@@ -84,7 +84,7 @@ function Sync-Directory {
                     elseif ($TimeNow -ge $TimeEnd) {
                         $Finished = $true
                         Write-Log -Level Warning -Message 'Searched for 2 minute Exiting...'
-                        Write-Log -Level Warning -Message 'Azure AD is still Busy.'
+                        Write-Log -Level Warning -Message 'Entra ID is still Busy.'
                         Write-Log -Level Error -Message 'User Creation will no continue past this point'
                         return $false
                     }
@@ -94,11 +94,11 @@ function Sync-Directory {
                     }
                 } until ($Finished -eq $true)
             }
-            Remove-PSSession $AADConnectSession
+            Remove-PSSession $EntraIDSession
         }
         if ($PSCmdlet.ShouldProcess($Server, "Start-ADSyncSyncCycle -PolicyType Delta")) {
-            Write-Log -Level Debug -Message 'Syncing ADConnect'
-            $PSIResult = Invoke-Command $AADConnectSync -ErrorAction Stop
+            Write-Log -Level Debug -Message 'Syncing Entra ID Connect'
+            $PSIResult = Invoke-Command $EntraIDSync -ErrorAction Stop
             if ($PSIResult) {
                 return $true
             }
@@ -109,7 +109,7 @@ function Sync-Directory {
         }
 
     }
-    elseif (!$AzureActiveDirectory -and !$ActiveDirectory) {
+    elseif (!$EntraID -and !$ActiveDirectory) {
         return Write-Log -Level Error -Message 'No System switch specified'
     }
     else {

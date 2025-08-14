@@ -22,8 +22,10 @@ function Initialize-Logging {
     param (
         [Parameter(Mandatory = $true)][string]$LogFilePath,
         [Parameter(Mandatory = $true)][string]$LogFileNamePrefix,
-        [Parameter(Mandatory = $false)][int]$MaxLogFileSizeMB = 10,
-        [Parameter(Mandatory = $false)][int]$MaxLogFiles = 5
+        [Parameter(Mandatory = $false)][int]$RotateAfterSize = 5*1024*1024,
+        [Parameter(Mandatory = $false)][int]$RotateAfterAmount = 5,
+        [string][ValidateSet('DEBUG','INFO','WARNING','ERROR')]$Level='DEBUG'
+
     )
 
     # Define common colors for both targets
@@ -34,9 +36,20 @@ function Initialize-Logging {
         Information = 'Green'
     }
 
-    # Configure Console Handler
-    Add-LoggingTarget -Type Console -Level Debug -Colors $LogColors
+    Set-LoggingDefaultLevel -Level $Level
 
-    # Configure Rotating File Handler
-    Add-LoggingTarget -Type File -Level Debug -Path (Join-Path $LogFilePath "$($LogFileNamePrefix)_$(Get-Date -Format 'yyyyMMdd').log") -RollingFile -MaxFileSizeMB $MaxLogFileSizeMB -MaxFiles $MaxLogFiles -Colors $LogColors
+    Add-LoggingTarget -Name Console -Configuration @{
+        ColorMapping = $color_mapping
+        level = $Level
+    }
+
+    Add-LoggingTarget -Name File -Configuration @{
+        Path = (Join-Path $LogFilePath "$($LogFileNamePrefix)_$(Get-Date -Format 'yyyyMMdd').log")
+        level = $Level
+        ColorMapping = $LogColors
+        Encoding = 'utf8'
+        RotateAfterSize = $RotateAfterSize
+        RotateAfterAmount = $RotateAfterAmount
+        RotateAmount = 1
+    }
 }

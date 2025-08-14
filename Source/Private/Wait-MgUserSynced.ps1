@@ -1,7 +1,7 @@
-function Wait-AADUSynced {
+function Wait-MgUserSynced {
     <#
     .SYNOPSIS
-    Waits till a user is found in AzureAD.
+    Waits till a user is found in Microsoft Graph.
     .DESCRIPTION
     Checks every 5 seconds if the user can be found.
     returns $true when they are found
@@ -28,15 +28,15 @@ function Wait-AADUSynced {
         if ($PSCmdlet.ShouldProcess($UserPrincipalName, "Check UserSynced")) {
             do {
                 $TimeNow = Get-Date
-                if (Assert-AADUExists -UserPrincipalName $UserPrincipalName) {
+                if (Assert-MgUserExist -UserPrincipalName $UserPrincipalName) {
                     $Finished = $true
-                    Write-Log -Level Debug -Message 'Found {0} In AzureAD' -Arguments $UserPrincipalName
+                    Write-Log -Level Debug -Message 'Found {0} In Microsoft Graph' -Arguments $UserPrincipalName
                     return $true
                 }
                 elseif ($TimeNow -ge $TimeEnd) {
                     $Finished = $true
                     Write-Log -Level Warning -Message 'Searched for 2 minute Exiting...'
-                    Write-Log -Level Warning -Message 'Failed to confirm AzureAD Connection'
+                    Write-Log -Level Warning -Message 'Failed to confirm Microsoft Graph Connection'
                     Write-Log -Level Error -Message 'User Creation will no continue past this point'
                     return $false
                 }

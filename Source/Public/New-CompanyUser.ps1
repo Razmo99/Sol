@@ -27,7 +27,6 @@ function New-CompanyUser {
         [Parameter(Mandatory = $true)][String]$Domain,
         [Parameter(Mandatory = $true)][String]$Company,
         [Parameter(Mandatory = $false)][System.Collections.ArrayList]$AdminGroups,
-        [Parameter(Mandatory = $false)][ValidateSet('Enabled', 'Disabled', 'Enforced')][String]$StrongAuthenticationRequirements,
         [Parameter(Mandatory = $false)][String]$FallbackUserOU,
         [Parameter(Mandatory = $false)][HashTable]$InteractivePrompts,
         [Parameter(Mandatory = $false)][HashTable]$AutoMemberOf,
@@ -57,17 +56,6 @@ function New-CompanyUser {
                 if (!(Assert-ADPermission @SplatAssertADPerms)) {
                     Write-Log -Level Error -Message 'Provided Credentials have insufficient permissions'
                     return
-                }
-            }
-        }
-        if ($StrongAuthenticationRequirements) {
-            if ($PSCmdlet.ShouldProcess($EmailDomain, 'Assert-MsolPermission')) {
-                if (!(Assert-MsolPermission -UserPrincipalName (whoami /upn) -MsolRoles @('User Administrator', 'Helpdesk Administrator'))) {
-                    $AADAdminCreds = Get-Credential -Message 'Enter AAD Admin Credentials'
-                    if (!(Assert-MsolPermission -UserPrincipalName $AADAdminCreds.UserName -MsolRoles @('User Administrator', 'Helpdesk Administrator'))) {
-                        Write-Log -Level Error -Message 'Provided Credentials have insufficient permissions'
-                        return
-                    }
                 }
             }
         }
@@ -151,8 +139,8 @@ function New-CompanyUser {
             Write-Log -Level Error -Message 'User Already Exists in AD'
             return
         }
-        if (Assert-AADUExists -UserPrincipalName $UserPrincipalName) {
-            Write-Log -Level Error -Message 'User Already Exists in AAD'
+        if (Assert-MgUserExist -UserPrincipalName $UserPrincipalName) {
+            Write-Log -Level Error -Message 'User Already Exists in Microsoft Graph'
             return
         }
         if (Assert-EMSUExists -SamAccountName $SamAccountName -Server $EMSServer) {
@@ -216,30 +204,26 @@ function New-CompanyUser {
             }
             Sync-Directories @SplatSyncAD
         }
-        [HashTable]$SplatSyncAAD = @{
-            Server               = $ADSyncServer
-            AzureActiveDirectory = $true
+        [HashTable]$SplatSyncMgGraph = @{
+            Server  = $ADSyncServer
+            EntraID = $true
         }
         if ($ADSyncAdminCreds) {
-            $SplatSyncAAD.Add('Credential', $ADSyncAdminCreds)
+            $SplatSyncMgGraph.Add('Credential', $ADSyncAdminCreds)
         }
-        if (Sync-Directories @SplatSyncAAD) {
-            if (Wait-AADUSynced -UserPrincipalName $UserPrincipalName) {
-                if ($StrongAuthenticationRequirements) {
-                    Set-MSolUMFA -UserPrincipalName $UserPrincipalName -StrongAuthenticationRequirements $StrongAuthenticationRequirements
-                }
-            }
+        if (Sync-Directories @SplatSyncMgGraph) {
+            Wait-MgUserSynced -UserPrincipalName $UserPrincipalName
         }
         [boolean]$FileServerAccess = $false
         if ($HomeDrive -and $HomeDirectory) {
             $FileServerAccess = $true
         }
         [String]$M365License = ''
-        if ($PSCmdlet.ShouldProcess($UserPrincipalName, 'Set-AADULicense')) {
+        if ($PSCmdlet.ShouldProcess($UserPrincipalName, 'Set-MgUserLicenseWrapper')) {
             $response = Read-Host 'Assign M365 License? [E1,E2,E3,N]ostyn'
             if ($response -match 'E[1-3]') {
                 $M365License = $response.ToUpper()
-                Set-AADULicense -UserPrincipalName $UserPrincipalName -LicenseType $M365License
+                Set-MgUserLicenseWrapper -UserPrincipalName $UserPrincipalName -LicenseType $M365License
             }
         }
         if ($InteractivePrompts -or $AutoMemberOf) {
