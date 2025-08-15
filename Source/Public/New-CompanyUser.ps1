@@ -14,7 +14,7 @@ function New-CompanyUser {
         [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName = $true)][System.Collections.ArrayList]$MemberOf = @(),
         [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName = $true)][HashTable]$AutoMemberOf = @{},
         [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName = $true)][HashTable]$InteractivePrompts = @{},
-        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)][validateset('Enabled', 'Disabled', 'Enforced')][String]$StrongAuthenticationRequiremets,        
+        
         [Parameter(Mandatory = $true)][String]$Domain,
         [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName = $true)][validateset('TRUE', 'FALSE')][string]$DistributionList = 'TRUE',
         [Parameter(Mandatory = $false)][PSCredential]$EMSCredentials,
@@ -487,19 +487,18 @@ function New-CompanyUser {
                 if (!$CurrentUser.contains($EmailDomain)) {
                     Write-Log -Level Debug -Message "RunAs User Email Domain does not contain: $EmailDomain"
                     Write-Log -Level Debug -Message 'AzureAD Connection Credentials will need to be manually entered'
-                    Test-AADConnected -CredentialPrompt -WhatIf:$false
+                    Test-MgConnected -UserPrincipalName $CurrentUser
                 }
                 Write-Log -Level Info -Message 'Starting AzureAD Connect Sync'
-                if ((Sync-Directories -Server $ADSyncServer -Credential $ADSyncCredentials -AzureActiveDirectory -ErrorAction Stop -Whatif:$WhatIfPreference) -or $WhatIfPreference) {
-                    if ((Wait-AADUSynced -UserPrincipalName $UserprincipalName -Whatif:$WhatIfPreference) -or $WhatIfPreference) {
+                if ((Sync-Directories -Server $ADSyncServer -Credential $ADSyncCredentials -EntraID -ErrorAction Stop -Whatif:$WhatIfPreference) -or $WhatIfPreference) {
+                    if ((Wait-UntilTrue -Condition { Assert-MgUserExist -UserPrincipalName $using:UserprincipalName } -TimeoutSeconds 120 -Context "Microsoft Graph user sync for $UserprincipalName") -or $WhatIfPreference) {
                         if ($M365License) {
                             Write-Log -Level Debug -Message "Trying to assign a $M365License License to $UserprincipalName"
-                            if ( !(Set-AADULicense -UserPrincipalName $UserprincipalName -LicenseType $M365License -Whatif:$WhatIfPreference) -and $Interactive) {
+                            if ( !(Set-MgUserLicenseWrapper -UserPrincipalName $UserprincipalName -LicenseType $M365License) -and $Interactive) {
                                 Test-UserContinue -Message 'No Microsoft 365 License assigned. Press any key to continue'
                             }
                         }
-                        Write-Log -Level Debug -Message 'Setting user MFA'                      
-                        Set-MSolUMFA -UserPrincipalName $UserprincipalName -StrongAuthenticationRequiremets $StrongAuthenticationRequiremets -Whatif:$WhatIfPreference
+                        Write-Log -Level Debug -Message 'MFA will be handled by tenant security defaults and conditional access policies'
                     }
                 }
                 else {
@@ -533,19 +532,18 @@ function New-CompanyUser {
             if (!$CurrentUser.contains($EmailDomain)) {
                 Write-Log -Level Debug -Message "RunAs User Email Domain does not contain: $EmailDomain"
                 Write-Log -Level Debug -Message 'AzureAD Connection Credentials will need to be manually entered'
-                Test-AADConnected -CredentialPrompt -whatif:$False
+                Test-MgConnected -UserPrincipalName $CurrentUser
             }
             Write-Log -Level Info -Message 'Starting AzureAD Connect Sync'
-            if ((Sync-Directories -Server $ADSyncServer -Credential $ADSyncCredentials -AzureActiveDirectory -ErrorAction Stop -Whatif:$WhatIfPreference) -or $WhatIfPreference) {
-                if ((Wait-AADUSynced -UserPrincipalName $UserprincipalName -Whatif:$WhatIfPreference) -or $WhatIfPreference) {
+            if ((Sync-Directories -Server $ADSyncServer -Credential $ADSyncCredentials -EntraID -ErrorAction Stop -Whatif:$WhatIfPreference) -or $WhatIfPreference) {
+                if ((Wait-UntilTrue -Condition { Assert-MgUserExist -UserPrincipalName $using:UserprincipalName } -TimeoutSeconds 120 -Context "Microsoft Graph user sync for $UserprincipalName") -or $WhatIfPreference) {
                     if ($M365License) {
                         Write-Log -Level Debug -Message "Trying to assign a $M365License License to $UserprincipalName"
-                        if ( !(Set-AADULicense -UserPrincipalName $UserprincipalName -LicenseType $M365License -Whatif:$WhatIfPreference) -and $Interactive) {
+                        if ( !(Set-MgUserLicenseWrapper -UserPrincipalName $UserprincipalName -LicenseType $M365License) -and $Interactive) {
                             Test-UserContinue -Message 'No Microsoft 365 License assigned. Press any key to continue'
                         }
                     }
-                    Write-Log -Level Debug -Message 'Setting user MFA'                      
-                    Set-MSolUMFA -UserPrincipalName $UserprincipalName -StrongAuthenticationRequiremets $StrongAuthenticationRequiremets -Whatif:$WhatIfPreference
+                    Write-Log -Level Debug -Message 'MFA will be handled by tenant security defaults and conditional access policies'
                 }
             }
             else {
