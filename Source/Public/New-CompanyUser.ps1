@@ -431,7 +431,7 @@ function New-CompanyUser {
             Write-Log -Level Debug -Message 'Active Directory Details'
             Write-Log -Level Debug -Message '------------------------------'
             if ($M365DeploymentType -eq 'Hybrid') { $SplatADAttributes | Format-table -Verbose }else { $SplatADNewUser | Format-table -Verbose }
-            Write-Verbose ('------------------------------')
+            Write-Log -Level Debug -Message '------------------------------'
             Write-Log -Level Debug -Message 'AD Group Details'
             Write-Log -Level Debug -Message '------------------------------'
             $MemberOf | Format-List -Verbose
@@ -444,7 +444,6 @@ function New-CompanyUser {
             }
             if (!(Test-UserContinue -Message 'Above are the details for the user to be created, if the details are correct proceed otherwise cancel')) {
                 Write-Log -Level Debug -Message 'User Cancelled Terminating'
-                Stop-Transcript
                 Exit
             }
         }
@@ -482,14 +481,14 @@ function New-CompanyUser {
                         Write-Log -Level Debug -Message 'No groups specified'
                     }
                 }
-                #Start an Delta Sync on AzureAD Connect
+                #Start an Delta Sync on Entra Connect
                 $CurrentUser = (whoami /UPN)
                 if (!$CurrentUser.contains($EmailDomain)) {
                     Write-Log -Level Debug -Message "RunAs User Email Domain does not contain: $EmailDomain"
-                    Write-Log -Level Debug -Message 'AzureAD Connection Credentials will need to be manually entered'
+                    Write-Log -Level Debug -Message 'Microsoft Graph Connection Credentials will need to be manually entered'
                     Test-MgConnected -UserPrincipalName $CurrentUser
                 }
-                Write-Log -Level Info -Message 'Starting AzureAD Connect Sync'
+                Write-Log -Level Info -Message 'Starting Entra Connect Sync'
                 if ((Sync-Directories -Server $ADSyncServer -Credential $ADSyncCredentials -EntraID -ErrorAction Stop -Whatif:$WhatIfPreference) -or $WhatIfPreference) {
                     if ((Wait-UntilTrue -Condition { Assert-MgUserExist -UserPrincipalName $using:UserprincipalName } -TimeoutSeconds 120 -Context "Microsoft Graph user sync for $UserprincipalName") -or $WhatIfPreference) {
                         if ($M365License) {
@@ -527,14 +526,14 @@ function New-CompanyUser {
                     Write-Log -Level Debug -Message 'No groups specified'
                 }
             }
-            #Start an Delta Sync on AzureAD Connect
+            #Start an Delta Sync on Entra Connect
             $CurrentUser = (whoami /UPN)
             if (!$CurrentUser.contains($EmailDomain)) {
                 Write-Log -Level Debug -Message "RunAs User Email Domain does not contain: $EmailDomain"
-                Write-Log -Level Debug -Message 'AzureAD Connection Credentials will need to be manually entered'
+                Write-Log -Level Debug -Message 'Microsoft Graph Connection Credentials will need to be manually entered'
                 Test-MgConnected -UserPrincipalName $CurrentUser
             }
-            Write-Log -Level Info -Message 'Starting AzureAD Connect Sync'
+            Write-Log -Level Info -Message 'Starting Entra Connect Sync'
             if ((Sync-Directories -Server $ADSyncServer -Credential $ADSyncCredentials -EntraID -ErrorAction Stop -Whatif:$WhatIfPreference) -or $WhatIfPreference) {
                 if ((Wait-UntilTrue -Condition { Assert-MgUserExist -UserPrincipalName $using:UserprincipalName } -TimeoutSeconds 120 -Context "Microsoft Graph user sync for $UserprincipalName") -or $WhatIfPreference) {
                     if ($M365License) {
@@ -555,5 +554,7 @@ function New-CompanyUser {
         }
         #endregion Cloud
     }
-    end {}
+    end {
+        # Cleanup and finalization handled by logging module
+    }
 }
