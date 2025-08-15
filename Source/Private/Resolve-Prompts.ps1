@@ -1,4 +1,4 @@
-function Resolve-Prompt {
+function Resolve-Prompts {
     <#
     .SYNOPSIS
     Resolves the provided prompts using Topological sorting till completion

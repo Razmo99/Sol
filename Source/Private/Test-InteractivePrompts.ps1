@@ -1,10 +1,10 @@
 function Test-InteractivePrompt {
     <#
     .SYNOPSIS
-    Presents the inputted prompts to the use.
+    Presents the inputted prompts to the user.
 
     .DESCRIPTION
-    Presents Interactive prompts in a Topologicaly sorted order based on each prompts unique requirements
+    Presents Interactive prompts in a Topologically sorted order based on each prompt's unique requirements
 
     .PARAMETER InteractivePrompts
     System.HashTable - Contains all Interactive Prompts to present to the user for Answers

@@ -1,4 +1,18 @@
-function Test-Prompt {
+function Test-Prompts {
+    <#
+    .SYNOPSIS
+    Tests prompts without requirements and returns those answered positively by the user
+    
+    .DESCRIPTION
+    Iterates over provided prompts that have no requirements and presents them to the user.
+    Returns a hashtable containing only the prompts that the user answered "yes" to.
+    
+    .PARAMETER Prompts
+    System.HashTable - Contains prompts without requirements to present to the user
+    
+    .OUTPUTS
+    System.Collections.Hashtable - Contains prompts that the user answered positively
+    #>
     [CmdletBinding()]
     [OutputType([System.Collections.Hashtable])]
     param(

@@ -37,7 +37,7 @@ function Sync-Directory {
     }
     if ($ActiveDirectory) {
         $ADReplicate = {
-            $DCSession = New-PSSession -ComputerName $Server -Credential $Credential
+            $DCSession = New-ManagedPSSession -ComputerName $Server -Credential $Credential
             Invoke-Command -Session $DCSession -ScriptBlock {
                 Import-Module -Name 'ActiveDirectory'
                 Write-Output ('Syncing all DC held on ' + $using:Server)
@@ -58,41 +58,34 @@ function Sync-Directory {
     }
     elseif ($EntraID) {
         $EntraIDSync = {
-            $EntraIDSession = New-PSSession -ComputerName $Server -Credential $Credential
+            $EntraIDSession = New-ManagedPSSession -ComputerName $Server -Credential $Credential
             Invoke-Command -Session $EntraIDSession -ScriptBlock {
                 $VerbosePreference = 'Continue'
                 Import-Module -Name 'ADSync' -Function Get-ADSyncConnectorRunStatus, Start-ADSyncSyncCycle
-                $TimeStart = Get-Date
-                $TimeEnd = $timeStart.addminutes(2)
-                $Finished = $false
-                do {
-                    $TimeNow = Get-Date
-                    if (!(Get-ADSyncConnectorRunStatus)) {
-                        try {
-                            Start-ADSyncSyncCycle -PolicyType Delta -ErrorAction Stop
-                            $Finished = $true
-                            return $true
-                        }
-                        catch [System.Management.Automation.RuntimeException] {
-                            Write-Log -Level Debug -Message 'Sync is already running. Cannot start a new run till this one completes.'
-                            $Finished = $false
-                        }
-                        catch {
-                            Write-Log -Level Debug -Message $_.Exception.Message -ExceptionInfo $_
-                        }
-                    }
-                    elseif ($TimeNow -ge $TimeEnd) {
-                        $Finished = $true
-                        Write-Log -Level Warning -Message 'Searched for 2 minute Exiting...'
-                        Write-Log -Level Warning -Message 'Entra ID is still Busy.'
-                        Write-Log -Level Error -Message 'User Creation will no continue past this point'
-                        return $false
-                    }
-                    else {
-                        Write-Log -Level Debug -Message 'Sleeping 10 second'
-                        Start-Sleep -Seconds 10
-                    }
-                } until ($Finished -eq $true)
+                
+                # Use Wait-UntilTrue to wait for sync completion, then start new cycle
+                $SyncCompleted = Wait-UntilTrue -Condition { 
+                    !(Get-ADSyncConnectorRunStatus) 
+                } -TimeoutSeconds 120 -SleepSeconds 10 -Context "EntraID sync completion"
+                
+                if (!$SyncCompleted) {
+                    Write-Log -Level Warning -Message 'Timeout waiting for EntraID sync to complete'
+                    Write-Log -Level Error -Message 'User Creation will not continue past this point'
+                    return $false
+                }
+                
+                try {
+                    Start-ADSyncSyncCycle -PolicyType Delta -ErrorAction Stop
+                    return $true
+                }
+                catch [System.Management.Automation.RuntimeException] {
+                    Write-Log -Level Warning -Message 'Sync cycle could not start - another sync may still be running'
+                    return $false
+                }
+                catch {
+                    Write-Log -Level Error -Message $_.Exception.Message -ExceptionInfo $_
+                    return $false
+                }
             }
             Remove-PSSession $EntraIDSession
         }

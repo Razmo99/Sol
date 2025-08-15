@@ -1,28 +1,42 @@
-﻿function Test-EMSConnected {
+function Test-EMSConnected {
     <#
     .SYNOPSIS
-    Checks if a connection to EMS is Present
+        Tests if Exchange Management Shell connection is active and functional
     .DESCRIPTION
-        Checks to see if an active ps session is present and if the command New-RemoteMailbox is available.
-        If it is not it checked for a stale session and removes it.
-        returns true if the command can be retreived false otherwise
+        Verifies EMS session exists, is open, and required cmdlets are available.
+        Removes stale sessions if cmdlets are unavailable.
     .OUTPUTS
-        system.boolean
-    .INPUTS
-     None
+        System.Boolean - True if EMS is connected and functional, False otherwise
     #>
-    $CheckExistingSession = Get-PSSession | Where-Object { $_.State -eq 'Opened' -and $_.ConfigurationName -eq 'Microsoft.Exchange' }
-    [bool]$CheckEMSCommandPresent = Get-Command New-RemoteMailbox -ErrorAction SilentlyContinue
-    if (!$CheckEMSCommandPresent) {
-        Write-Log -Level Debug -Message 'Unable to get EMS Commands'
-        if ($CheckExistingSession) {
-            Write-Log -Level Debug -Message 'Removing stale PSSession'
-            $CheckExistingSession | Remove-PSSession
+    [CmdletBinding()]
+    [OutputType([Boolean])]
+    param()
+
+    Process {
+        # Find EMS session
+        $EMSSession = Get-PSSession | Where-Object { 
+            $_.State -eq 'Opened' -and $_.ConfigurationName -eq 'Microsoft.Exchange' 
+        } | Select-Object -First 1
+
+        # Check if EMS cmdlets are available
+        $EMSCommandAvailable = Get-Command New-RemoteMailbox -ErrorAction SilentlyContinue
+
+        if (!$EMSCommandAvailable) {
+            Write-Log -Level Debug -Message 'EMS cmdlets not available'
+            if ($EMSSession) {
+                Write-Log -Level Debug -Message 'Removing stale EMS session'
+                Remove-PSSession -Session $EMSSession
+            }
+            return $false
         }
+
+        # Test session is functional using utility
+        if ($EMSSession -and (Test-ManagedPSSession -Session $EMSSession -ConfigurationName 'Microsoft.Exchange' -TestCommand 'New-RemoteMailbox')) {
+            Write-Log -Level Debug -Message 'EMS session is active and functional'
+            return $true
+        }
+
+        Write-Log -Level Debug -Message 'EMS session validation failed'
         return $false
-    }
-    elseif ($CheckExistingSession) {
-        Write-Log -Level Debug -Message 'EMS Session Already Present'
-        return $true
     }
 }

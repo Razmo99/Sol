@@ -226,8 +226,86 @@ If this file is missing or cannot be found the New-CompanyUser will just be unab
     <OutBack-9998>
 </contoso>
 ~~~
-## Logging
-Logs will be placed in a folder called logs in the same directory as the [configuration .ps1](#Usage)
+## Interactive Prompts
 
-Single user creations will be named {DisplayName}_{Date}.log
-Pipeline user creation will be name {Domain}_{Date}.log
+The module supports advanced conditional prompting through an `InteractivePrompts` configuration. This allows you to present context-specific questions to users based on their assigned licenses, file server access, and dependencies between prompts.
+
+### Setting up Interactive Prompts
+
+Interactive prompts are configured as a HashTable and passed to `New-CompanyUser`. Each prompt can have requirements that determine when it should be displayed to the user.
+
+#### Basic Interactive Prompt Structure
+~~~powershell
+$InteractivePrompts = @{
+    'EmailAccess' = @{
+        Message = 'Does this user need access to shared mailboxes?'
+        Inverse = $false
+        MemberOf = @('SharedMailboxUsers')
+    }
+    'VPNAccess' = @{
+        Message = 'Does this user need VPN access?'
+        Inverse = $false  
+        MemberOf = @('VPN-Users')
+        Requirements = @{
+            FileServerAccess = $true
+            M365License = @('E3', 'E5')
+        }
+    }
+    'AdminRights' = @{
+        Message = 'Does this user need administrative rights?'
+        Inverse = $false
+        MemberOf = @('Local-Admins')
+        Requirements = @{
+            Prompts = @('VPNAccess')
+        }
+    }
+}
+~~~
+
+#### Adding to Company Configuration
+~~~powershell
+$SplatContosoCompanyUser = @{
+    EMSServer = 'exchange.contoso.local'
+    ADSyncServer = 'adsync.contoso.local'
+    EmailDomain = '@contoso.local'
+    Domain = 'contoso'
+    Company = 'contoso'
+    FallbackUserOU = 'contoso.local/Users'
+    AdminGroups = ('Domain Admins','ContosoHelpdesk')
+    InteractivePrompts = $InteractivePrompts
+}
+~~~
+
+### Prompt Requirements
+
+Prompts support three types of requirements:
+
+- **FileServerAccess** -- `{bool}`
+    - Prompt only displays if the user has been assigned file server access
+- **M365License** -- `{ArrayList}`
+    - Prompt only displays if user has one of the specified licenses ('E1','E2','E3' or 'Any')
+- **Prompts** -- `{ArrayList}`
+    - Prompt only displays if the user answered "yes" to the specified dependent prompts
+
+The system automatically handles prompt ordering using topological sorting to ensure dependencies are resolved in the correct sequence.
+
+## Logging
+
+Sol automatically creates detailed logs to track user creation activities. Logs are stored in a `logs` folder created in the same directory as your [configuration script](#usage).
+
+### Log File Naming Convention
+
+- **Single User Creation**: `{DisplayName}_{Date}.log`
+- **Pipeline/Batch Creation**: `{Domain}_{Date}.log`
+
+### Log Location
+
+```
+YourScript.ps1
+logs/
+├── John.Smith_2023-12-15.log
+├── Jane.Doe_2023-12-15.log
+└── contoso_2023-12-15.log
+```
+
+Logs contain detailed information about each step of the user creation process, including any errors encountered and credential prompts.

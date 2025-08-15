@@ -1,91 +1,61 @@
 function Import-EMS {
     <#
     .SYNOPSIS
-    Checks if a connection to Exchange Management Shell is Present
+        Establishes Exchange Management Shell connection and imports required cmdlets
     .DESCRIPTION
-    Checks if a connection to Exchange Management Shell is Present. If its not initiate one.
-    This is a Boolean function, and should be used as such
+        Checks for existing EMS connection, creates new session if needed, and imports
+        Exchange cmdlets into global scope for use throughout the module
     .PARAMETER Server
-    Server FQDN that has Exchange Management Shell installed on.
-    .PARAMETER Credential
-    Credentials for the PSSession
+        Exchange server FQDN to connect to
     .PARAMETER EMSAuth
-    Type of Auth to use when inititating the PSSession
+        Authentication method to use when creating the PSSession
+    .PARAMETER Credential
+        Optional credentials for authentication
     .OUTPUTS
-    system.boolean $True for connected $False for not
-    .INPUTS
-    None
+        System.Boolean - True if connected and cmdlets imported, False otherwise
     #>
     [CmdletBinding(SupportsShouldProcess = $true)]
     [OutputType([Boolean])]
     param (
-        [parameter(Mandatory = $true)][String]$Server,
-        [parameter(Mandatory = $false)][String][Validateset('Default', 'Basic', 'Credssp', 'Digest', 'Kerberos', 'Negotiate', 'NegotiateWithImplicitCredential')]$EMSAuth = "Kerberos",
-        [parameter(Mandatory = $false)][pscredential]$Credential
+        [Parameter(Mandatory = $true)]
+        [String]$Server,
+        
+        [Parameter(Mandatory = $false)]
+        [ValidateSet('Default', 'Basic', 'Credssp', 'Digest', 'Kerberos', 'Negotiate', 'NegotiateWithImplicitCredential')]
+        [String]$EMSAuth = "Kerberos",
+        
+        [Parameter(Mandatory = $false)]
+        [PSCredential]$Credential
     )
-    #Try to Import the EMS Module for Later use
-    $CheckExistingSession = Get-PSSession | Where-Object { $_.State -eq 'Opened' -and $_.ConfigurationName -eq 'Microsoft.Exchange' }
-    #Check if a PSsession is already open.
-    if (!$CheckExistingSession) {
-        Try {
-            #Splatter for New PS Session
-            [hashtable]$SplatNewPSSession = @{
-                ConfigurationName = 'Microsoft.Exchange'
-                ConnectionUri     = 'http://' + $Server + '/Powershell'
-                Authentication    = $EMSAuth
-                ErrorAction       = 'Stop'
-            }
-            #Add Credentials if presented
-            if ($Credential) {
-                Write-Log -Level Debug -Message 'Credentials provided'
-                $SplatNewPSSession.Add('Credential', $Credential)
-            }
-            #Whatif functionality
-            if ($PSCmdlet.ShouldProcess($Server, 'Import-PSSession')) {
-                Write-Log -Level Debug -Message 'Attempting to Connect to {0} Using {1} For Authentication' -Arguments @($Server, $EMSAuth)
-                $EMS = New-PSSession @SplatNewPSSession
-                Write-Log -Level Debug -Message 'Importing Modules'
-                #This is done to get the imported functions into the global name space
-                Import-Module(Import-PSSession $EMS -DisableNameChecking -AllowClobber -ErrorAction Stop -CommandName Get-RemoteMailbox, New-RemoteMailbox) -Global
-                return $true
-            }
+
+    Process {
+        # Check for existing EMS session
+        $ExistingSession = Get-PSSession | Where-Object { 
+            $_.State -eq 'Opened' -and $_.ConfigurationName -eq 'Microsoft.Exchange' 
         }
-        #Catch for creds with out permission
-        catch [System.Management.Automation.Remoting.PSRemotingTransportException] {
-            #check the exception message to see if it was an access denied
-            if ($_.Exception.Message.contains("AuthZ-CmdletAccessDeniedException")) {
-                Write-Log -Level Warning -Message 'Failed to connect to EMS server with logged in account creds prompting for alternative creds'
-                $EMSCreds = Get-Credential -Message "Enter EMS Admin Credentials"
-                #Try import EMS Modules again with provided credentials | same try catch as above
-                try {
-                    if ($PSCmdlet.ShouldProcess($Server, 'Import-PSSession')) {
-                        Write-Log -Level Debug -Message 'Attempting to Connect to {0} Using {1} For Authentication' -Arguments @($Server, $EMSAuth)
-                        $EMS = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri ('http://' + $Server + '/Powershell') -Authentication $EMSAuth -ErrorAction Stop -Credential $EMSCreds
-                        Write-Log -Level Debug -Message 'Importing Modules'
-                        Import-Module(Import-PSSession $EMS -DisableNameChecking -AllowClobber -ErrorAction Stop -CommandName Get-RemoteMailbox, New-RemoteMailbox) -Global
-                        return $true
-                    }
-                }
-                catch {
-                    #We don't get a 3rd chance.
-                    Write-Log -Level Error -Message $_.Exception.Message -ExceptionInfo $_
-                    return $false
-                }
-                #If we dont get what we expect terminate
-            }
-            else {
-                Write-Log -Level Error -Message $_.Exception.Message -ExceptionInfo $_
-                exit
-            }
+
+        if ($ExistingSession) {
+            Write-Log -Level Debug -Message 'EMS session already exists'
+            return Test-EMSConnected
         }
-        Catch {
-            Write-Log -Level Warning -Message 'Failed to connect to Exchange Server {0}' -Arguments $Server
-            Write-Log -Level Warning -Message $_.Exception.Message -ExceptionInfo $_
+
+        # Guard: WhatIf check
+        if (!$PSCmdlet.ShouldProcess($Server, 'Import-PSSession')) { return $false }
+
+        try {
+            Write-Log -Level Debug -Message "Connecting to Exchange server $Server using $EMSAuth authentication"
+            
+            # Create EMS session with credential prompting enabled
+            $EMS = New-ManagedPSSession -ConnectionUri "http://$Server/Powershell" -ConfigurationName 'Microsoft.Exchange' -Authentication $EMSAuth -Credential $Credential -PromptForCredentials
+            
+            Write-Log -Level Debug -Message 'Importing Exchange cmdlets into global scope'
+            Import-Module (Import-PSSession $EMS -DisableNameChecking -AllowClobber -ErrorAction Stop -CommandName Get-RemoteMailbox, New-RemoteMailbox) -Global
+            
+            return $true
+        }
+        catch {
+            Write-Log -Level Error -Message "Failed to import EMS from $Server`: $($_.Exception.Message)" -ExceptionInfo $_
             return $false
         }
-    }
-    # We should be connect to EMS at this point. Lets check
-    if ($PSCmdlet.ShouldProcess("LocalHost", "Get-Command New-RemoteMailbox")) {
-        Test-EMSConnected
     }
 }

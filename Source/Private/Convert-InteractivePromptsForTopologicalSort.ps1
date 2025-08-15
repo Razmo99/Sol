@@ -1,9 +1,17 @@
 function Convert-InteractivePromptsForTopologicalSort {
     <#
     .SYNOPSIS
-    Converts Promtps to a format that is accepeted by the Get-TopologicalSort function
+    Converts Prompts to a format that is accepted by the Get-TopologicalSort function
+    
+    .DESCRIPTION
+    Transforms interactive prompts into a dependency graph format suitable for topological sorting.
+    Extracts prompt requirements and creates a hashtable where each prompt name maps to its dependencies.
+    
     .PARAMETER Prompts
-    System.HashTable - Prompts to be converted
+    System.HashTable - Interactive prompts to be converted for topological sorting
+    
+    .OUTPUTS
+    System.Collections.Hashtable - Dependency graph where keys are prompt names and values are arrays of required prompt names
     #>
     param(
         [Parameter(Mandatory = $true)][HashTable]$Prompts

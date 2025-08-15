@@ -21,21 +21,11 @@ function Assert-ADSyncPermission {
     )
     Begin {}
     Process {
-        # Default parameters for the sessions
-        [hashtable]$SplatNewPSSession = @{
-            ComputerName = $Server
-            ErrorAction  = 'Stop'
-        }
-        #Add Credentials if presented
-        if ($Credential) {
-            Write-Log -Level Debug -Message 'ADSync Credentials provided'
-            $SplatNewPSSession.Add('Credential', $Credential)
-        }
         # boolean to return
         $Result = $true
         try {
             # open a sessions to the ADSync Server
-            $Session = New-PSSession @SplatNewPSSession
+            $Session = New-ManagedPSSession -ComputerName $Server -Credential $Credential
             # Try to get the local ADSync Groups and see if the user is part of them
             try {
                 if ($Credential.UserName.Contains('\')) {
