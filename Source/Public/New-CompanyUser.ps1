@@ -187,14 +187,16 @@ function New-CompanyUser {
                 return
             }
         }
-        [HashTable]$SplatWaitADUSynced = @{
+        $SplatAssertADU = @{
             SamAccountName = $SamAccountName
-            Server         = $Domain
+            Server = $Domain
+            ErrorAction = 'SilentlyContinue'
         }
-        if ($ADAdminCreds) {
-            $SplatWaitADUSynced.Add('Credential', $ADAdminCreds)
-        }
-        if (Wait-ADUSynced @SplatWaitADUSynced) {
+        if ($ADAdminCreds) { $SplatAssertADU.Add('Credential', $ADAdminCreds) }
+        
+        if (Wait-UntilTrue -Condition { Assert-ADUExists @using:SplatAssertADU } `
+                          -TimeoutSeconds 60 `
+                          -Context "Active Directory user sync for $SamAccountName") {
             [HashTable]$SplatSyncAD = @{
                 Server          = $Domain
                 ActiveDirectory = $true
@@ -212,7 +214,11 @@ function New-CompanyUser {
             $SplatSyncMgGraph.Add('Credential', $ADSyncAdminCreds)
         }
         if (Sync-Directories @SplatSyncMgGraph) {
-            Wait-MgUserSynced -UserPrincipalName $UserPrincipalName
+            Wait-UntilTrue -Condition { Assert-MgUserExist -UserPrincipalName $UserPrincipalName } `
+                          -TimeoutSeconds 120 `
+                          -Context "Microsoft Graph user sync for $UserPrincipalName" `
+                          -SuccessMessage "Found $UserPrincipalName in Microsoft Graph" `
+                          -TimeoutMessage "Failed to find $UserPrincipalName in Microsoft Graph after 2 minutes"
         }
         [boolean]$FileServerAccess = $false
         if ($HomeDrive -and $HomeDirectory) {
