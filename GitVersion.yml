@@ -5,11 +5,13 @@ semantic-version-format: Strict
 commit-date-format: "yyyyMMddTHHmmss"
 assembly-file-versioning-format: "{Major}.{Minor}.{Patch}.{env:GITHUB_RUN_NUMBER ?? 0}"
 assembly-informational-format: "{NuGetVersionV2}+Build.{env:GITHUB_RUN_NUMBER ?? local}.Branch.{EscapedBranchName}.Sha.{Sha}.Date.{CommitDate}"
-major-version-bump-message: 'semver:\s?(breaking|major)'
-minor-version-bump-message: 'semver:\s?(feature|minor)'
-patch-version-bump-message: 'semver:\s?(fix|patch)'
-no-bump-message: 'semver:\s?(none|skip)'
-commit-message-incrementing: Enabled
+# Enhanced semantic commit message support (ModuleBuilder pattern)
+commit-message-incrementing:
+  enabled: true
+  major-version-bump-message: '\+?semver:\s?(breaking|major)'
+  minor-version-bump-message: '\+?semver:\s?(feature|minor)'
+  patch-version-bump-message: '\+?semver:\s?(fix|patch)'
+  no-bump-message: '\+?semver:\s?(none|skip)'
 
 branches:
   main:
