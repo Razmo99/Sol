@@ -56,10 +56,22 @@ jobs:
             $semver = $version
             Write-Host "Using manual version: $version" -ForegroundColor Green
           } else {
-            $gitVersionOutput = dotnet-gitversion | ConvertFrom-Json
-            $version = $gitVersionOutput.MajorMinorPatch
-            $semver = $gitVersionOutput.SemVer
-            Write-Host "Using GitVersion: $version" -ForegroundColor Green
+            Write-Host "Running GitVersion..." -ForegroundColor Green
+            $gitVersionRaw = dotnet-gitversion
+            Write-Host "GitVersion output:" -ForegroundColor Yellow
+            Write-Host $gitVersionRaw
+            
+            try {
+              $gitVersionOutput = $gitVersionRaw | ConvertFrom-Json
+              $version = $gitVersionOutput.MajorMinorPatch
+              $semver = $gitVersionOutput.SemVer
+              Write-Host "Using GitVersion: $version" -ForegroundColor Green
+            } catch {
+              Write-Warning "GitVersion output could not be parsed as JSON. Using fallback version."
+              Write-Host "Error: $_" -ForegroundColor Red
+              $version = "0.1.0"
+              $semver = "0.1.0-release.${{ github.run_number }}"
+            }
           }
           
           echo "version=$version" >> $env:GITHUB_OUTPUT
