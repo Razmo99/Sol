@@ -36,7 +36,7 @@ jobs:
         shell: pwsh
         run: |
           Set-PSRepository PSGallery -InstallationPolicy Trusted
-          $modules = @('Pester', 'PSScriptAnalyzer', 'ModuleBuilder')
+          $modules = @('Pester', 'PSScriptAnalyzer', 'ModuleBuilder', 'Logging')
           foreach ($module in $modules) {
             Write-Host "Installing $module..." -ForegroundColor Green
             Install-Module $module -Force -SkipPublisherCheck -Scope CurrentUser
@@ -123,7 +123,7 @@ jobs:
         shell: pwsh
         run: |
           Set-PSRepository PSGallery -InstallationPolicy Trusted
-          $modules = @('Pester')
+          $modules = @('Pester', 'Logging')
           foreach ($module in $modules) {
             Write-Host "Installing $module..." -ForegroundColor Green
             Install-Module $module -Force -SkipPublisherCheck -Scope CurrentUser
