@@ -1,0 +1,89 @@
+# Dependabot configuration for Sol PowerShell Module
+# Manages dependency updates for GitHub Actions, .NET tools, and PowerShell modules
+
+version: 2
+updates:
+  # GitHub Actions dependencies
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "@sol-maintainers"
+    assignees:
+      - "@sol-maintainers"
+    commit-message:
+      prefix: "deps"
+      prefix-development: "deps-dev"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "github-actions"
+      - "security"
+    # Group GitHub Actions updates together
+    groups:
+      github-actions:
+        patterns:
+          - "actions/*"
+          - "*"
+    # Maintain security updates separately for faster merging
+    allow:
+      - dependency-type: "all"
+    
+  # .NET global tools (GitVersion, etc.)
+  - package-ecosystem: "nuget"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "@sol-maintainers"
+    assignees:
+      - "@sol-maintainers"
+    commit-message:
+      prefix: "deps"
+      prefix-development: "deps-dev"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "dotnet-tools"
+    # Auto-approve patch and minor updates for tools
+    allow:
+      - dependency-type: "all"
+    ignore:
+      # GitVersion major updates need manual review due to breaking changes
+      - dependency-name: "GitVersion.Tool"
+        update-types: ["version-update:semver-major"]
+
+  # PowerShell Gallery modules (indirect monitoring)
+  # Note: Dependabot doesn't natively support PowerShell Gallery,
+  # but we can use GitHub Actions to check for updates periodically
+  
+  # Docker images (if any Dockerfiles are added later)
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "docker"
+
+# Configuration notes:
+# - Security updates will be processed immediately regardless of schedule
+# - Version updates are batched by ecosystem to reduce PR volume
+# - Critical security updates bypass all limits and grouping
+# - Manual approval required for major version bumps of core dependencies

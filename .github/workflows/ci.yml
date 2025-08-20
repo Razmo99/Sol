@@ -1,0 +1,173 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  test:
+    name: Test PowerShell ${{ matrix.ps-version }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        ps-version: ['5.1', '7.x']
+        exclude:
+          - os: ubuntu-latest
+            ps-version: '5.1'
+        # Optimize for PRs: skip macOS to reduce costs
+        include:
+          - os: ubuntu-latest
+            ps-version: '7.x'
+            primary: true
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET 8 LTS for GitVersion
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+          cache: true
+
+      - name: Install GitVersion 6.4.0
+        run: dotnet tool install --global GitVersion.Tool --version 6.4.0
+
+      - name: Setup PowerShell
+        if: matrix.ps-version == '7.x'
+        uses: actions/setup-powershell@v1
+
+      - name: Install required PowerShell modules
+        shell: pwsh
+        run: |
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          $modules = @('Pester', 'PSScriptAnalyzer', 'ModuleBuilder')
+          foreach ($module in $modules) {
+            Write-Host "Installing $module..." -ForegroundColor Green
+            Install-Module $module -Force -SkipPublisherCheck -Scope CurrentUser
+          }
+
+      - name: Get version from GitVersion
+        id: gitversion
+        run: |
+          $gitVersionOutput = dotnet-gitversion | ConvertFrom-Json
+          $version = $gitVersionOutput.MajorMinorPatch
+          $semver = $gitVersionOutput.SemVer
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+          echo "semver=$semver" >> $env:GITHUB_OUTPUT
+          Write-Host "Version: $version" -ForegroundColor Green
+          Write-Host "SemVer: $semver" -ForegroundColor Green
+        shell: pwsh
+
+      - name: Run PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          Write-Host "Running PSScriptAnalyzer..." -ForegroundColor Green
+          $analysisResults = Invoke-ScriptAnalyzer -Path . -Recurse -Settings PSGallery -Severity @('Error', 'Warning')
+          
+          if ($analysisResults) {
+            $analysisResults | Format-Table -AutoSize
+            $errorCount = ($analysisResults | Where-Object Severity -eq 'Error').Count
+            $warningCount = ($analysisResults | Where-Object Severity -eq 'Warning').Count
+            
+            Write-Host "PSScriptAnalyzer found $errorCount error(s) and $warningCount warning(s)" -ForegroundColor $(if($errorCount -gt 0) {'Red'} else {'Yellow'})
+            
+            if ($errorCount -gt 0) {
+              throw "PSScriptAnalyzer found $errorCount error(s) that must be fixed"
+            }
+          } else {
+            Write-Host "PSScriptAnalyzer found no issues" -ForegroundColor Green
+          }
+
+      - name: Build module
+        shell: pwsh
+        run: |
+          Write-Host "Building module with GitVersion..." -ForegroundColor Green
+          ./build.ps1 -UseGitVersion
+
+      - name: Run Pester tests
+        shell: pwsh
+        run: |
+          Write-Host "Running Pester tests..." -ForegroundColor Green
+          
+          # Configure Pester
+          $pesterConfig = New-PesterConfiguration
+          $pesterConfig.Run.Path = './Tests'
+          $pesterConfig.Run.PassThru = $true
+          $pesterConfig.CodeCoverage.Enabled = $true
+          $pesterConfig.CodeCoverage.Path = './Source/**/*.ps1'
+          $pesterConfig.CodeCoverage.OutputFormat = 'JaCoCo'
+          $pesterConfig.CodeCoverage.OutputPath = 'coverage.xml'
+          $pesterConfig.TestResult.Enabled = $true
+          $pesterConfig.TestResult.OutputFormat = 'NUnitXml'
+          $pesterConfig.TestResult.OutputPath = 'testResults.xml'
+          
+          # Run tests
+          $testResult = Invoke-Pester -Configuration $pesterConfig
+          
+          Write-Host "Test Summary:" -ForegroundColor Green
+          Write-Host "  Total: $($testResult.TotalCount)" -ForegroundColor White
+          Write-Host "  Passed: $($testResult.PassedCount)" -ForegroundColor Green
+          Write-Host "  Failed: $($testResult.FailedCount)" -ForegroundColor $(if($testResult.FailedCount -gt 0) {'Red'} else {'Green'})
+          Write-Host "  Skipped: $($testResult.SkippedCount)" -ForegroundColor Yellow
+          
+          if ($testResult.FailedCount -gt 0) {
+            throw "$($testResult.FailedCount) test(s) failed"
+          }
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-${{ matrix.os }}-ps${{ matrix.ps-version }}-${{ github.run_id }}
+          path: |
+            testResults.xml
+            coverage.xml
+          retention-days: 30
+          compression-level: 6
+          include-hidden-files: false
+
+      - name: Upload module artifact
+        if: matrix.primary == true
+        uses: actions/upload-artifact@v4
+        with:
+          name: sol-module-${{ steps.gitversion.outputs.semver }}
+          path: output/
+          retention-days: 90
+          compression-level: 6
+
+  security-scan:
+    name: Security Analysis
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run PSScriptAnalyzer security scan
+        shell: pwsh
+        run: |
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+          $results = Invoke-ScriptAnalyzer -Path . -Recurse -Settings PSGallery -ReportSummary
+          if ($results) {
+            Write-Host "Security issues found:" -ForegroundColor Red
+            $results | Where-Object Severity -eq 'Error' | Format-Table -AutoSize
+            exit 1
+          }
+          Write-Host "No security issues found" -ForegroundColor Green
