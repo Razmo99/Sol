@@ -1,56 +1,50 @@
-# GitVersion 6.x configuration for Sol PowerShell Module
-# Uses GitHubFlow workflow pattern for simplified branching
-workflow: GitHubFlow/v1
-semantic-version-format: Strict
+mode: mainline
 commit-date-format: "yyyyMMddTHHmmss"
 assembly-file-versioning-format: "{Major}.{Minor}.{Patch}.{env:GITHUB_RUN_NUMBER ?? 0}"
 assembly-informational-format: "{NuGetVersionV2}+Build.{env:GITHUB_RUN_NUMBER ?? local}.Branch.{EscapedBranchName}.Sha.{Sha}.Date.{CommitDate}"
-# Enhanced semantic commit message support (ModuleBuilder pattern)
-commit-message-incrementing:
-  enabled: true
-  major-version-bump-message: '\+?semver:\s?(breaking|major)'
-  minor-version-bump-message: '\+?semver:\s?(feature|minor)'
-  patch-version-bump-message: '\+?semver:\s?(fix|patch)'
-  no-bump-message: '\+?semver:\s?(none|skip)'
+major-version-bump-message: 'semver:\s?(breaking|major)'
+minor-version-bump-message: 'semver:\s?(feature|minor)'
+patch-version-bump-message: 'semver:\s?(fix|patch)'
+no-bump-message: 'semver:\s?(none|skip)'
+commit-message-incrementing: Enabled
 
 branches:
   main:
-    label: ""
+    tag: ""
     regex: ^main$
     increment: Patch
     is-mainline: true
     tracks-release-branches: true
   develop:
-    label: "alpha"
+    tag: "alpha"
     regex: ^develop$
     increment: Minor
     source-branches: [ "main" ]
     tracks-release-branches: false
     is-mainline: false
   hotfix:
-    label: rc
-    regex: ^hotfix(es)?[\/](?<BranchName>.+)
+    tag: rc
+    regex: hotfix(es)?/\d+\.\d+\.\d+
     increment: None
     is-release-branch: true
     prevent-increment-of-merged-branch-version: true
     source-branches: [ "main" ]
   release:
-    label: rc
-    regex: ^releases?[\/](?<BranchName>\d+\.\d+\.\d+)
+    tag: rc
+    regex: releases?/\d+\.\d+\.\d+
     increment: None
     is-release-branch: true
     prevent-increment-of-merged-branch-version: true
     source-branches: [ "main", "develop" ]
   pull-request:
-    regex: ^pull[\/](?<number>\d+)
-    label: pr
-    label-number-pattern: '[\/](?<number>\d+)'
+    regex: pull/
+    tag: pr
+    tag-number-pattern: '[/-](?<number>\d+)'
     increment: Patch
     source-branches: [ "main", "develop", "feature", "release", "hotfix" ]
   feature:
-    regex: ^features?[\/](?<BranchName>.+)
-    label: "{BranchName}"
+    regex: .*/
+    tag: useBranchName
     source-branches: [ "main", "develop", "feature" ]
     track-merge-target: true
     tracks-release-branches: true
-    increment: Minor
