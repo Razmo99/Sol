@@ -29,8 +29,8 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - name: Install GitVersion 6.4.0
-        run: dotnet tool install --global GitVersion.Tool --version 6.4.0
+      - name: Install GitVersion 5.12.0
+        run: dotnet tool install --global GitVersion.Tool --version 5.12.0
 
       - name: Install required PowerShell modules
         shell: pwsh
@@ -47,10 +47,10 @@ jobs:
         run: |
           Write-Host "Running GitVersion..." -ForegroundColor Green
           
-          # Suppress GitVersion logging to get clean JSON output
-          $gitVersionRaw = dotnet-gitversion /verbosity=Quiet
-          Write-Host "GitVersion JSON output:" -ForegroundColor Yellow
-          Write-Host $gitVersionRaw
+          # Get GitVersion output as JSON
+          $gitVersionRaw = dotnet-gitversion
+          Write-Host "GitVersion output (first 500 chars):" -ForegroundColor Yellow
+          Write-Host ($gitVersionRaw | Out-String).Substring(0, [Math]::Min(500, $gitVersionRaw.Length))
           
           try {
             $gitVersionOutput = $gitVersionRaw | ConvertFrom-Json
