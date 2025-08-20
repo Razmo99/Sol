@@ -1,0 +1,79 @@
+name: 'Setup PowerShell Environment'
+description: 'Reusable action to setup PowerShell and required modules for Sol CI/CD'
+author: 'Sol PowerShell Module Team'
+
+inputs:
+  ps-version:
+    description: 'PowerShell version to setup'
+    required: true
+    default: '7.x'
+  cache-key-suffix:
+    description: 'Additional suffix for cache key'
+    required: false
+    default: ''
+  skip-module-install:
+    description: 'Skip installing PowerShell modules'
+    required: false
+    default: 'false'
+
+outputs:
+  cache-hit:
+    description: 'Whether cache was hit for PowerShell modules'
+    value: ${{ steps.cache-modules.outputs.cache-hit }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup PowerShell (Linux/macOS)
+      if: inputs.ps-version == '7.x' && runner.os != 'Windows'
+      uses: actions/setup-powershell@v1
+
+    - name: Cache PowerShell modules and .NET tools
+      id: cache-modules
+      uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
+      with:
+        path: |
+          ~/.local/share/powershell/Modules
+          ~/Documents/PowerShell/Modules
+          ~/Documents/WindowsPowerShell/Modules
+          ~/.dotnet/tools
+        key: ${{ runner.os }}-powershell-dotnet-${{ inputs.ps-version }}-${{ inputs.cache-key-suffix }}-${{ hashFiles('**/RequiredModules.psd1', '**/*.psd1', '**/GitVersion.yml') }}
+        restore-keys: |
+          ${{ runner.os }}-powershell-dotnet-${{ inputs.ps-version }}-${{ inputs.cache-key-suffix }}-
+          ${{ runner.os }}-powershell-dotnet-${{ inputs.ps-version }}-
+          ${{ runner.os }}-powershell-dotnet-
+
+    - name: Install required PowerShell modules
+      if: inputs.skip-module-install != 'true'
+      shell: pwsh
+      run: |
+        Set-PSRepository PSGallery -InstallationPolicy Trusted
+        
+        $modules = @(
+          @{Name='Pester'; MinimumVersion='5.6.1'},
+          @{Name='PSScriptAnalyzer'; MinimumVersion='1.22.0'},
+          @{Name='ModuleBuilder'; MinimumVersion='3.0.0'}
+        )
+        
+        Write-Host "Installing PowerShell modules..." -ForegroundColor Green
+        foreach ($module in $modules) {
+          $installed = Get-Module -ListAvailable -Name $module.Name | Where-Object Version -ge $module.MinimumVersion
+          if (-not $installed) {
+            Write-Host "Installing $($module.Name) (>= $($module.MinimumVersion))..." -ForegroundColor Green
+            try {
+              Install-Module $module.Name -Force -SkipPublisherCheck -Scope CurrentUser -MinimumVersion $module.MinimumVersion -ErrorAction Stop
+              Write-Host "✓ Successfully installed $($module.Name)" -ForegroundColor Green
+            } catch {
+              Write-Host "✗ Failed to install $($module.Name): $($_.Exception.Message)" -ForegroundColor Red
+              throw
+            }
+          } else {
+            Write-Host "✓ $($module.Name) already installed: $($installed.Version)" -ForegroundColor Yellow
+          }
+        }
+        
+        Write-Host "PowerShell environment setup complete!" -ForegroundColor Green
+
+branding:
+  icon: 'settings'
+  color: 'blue'
