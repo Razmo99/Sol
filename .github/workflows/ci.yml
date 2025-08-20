@@ -43,9 +43,11 @@ jobs:
       - name: Install GitVersion 6.4.0
         run: dotnet tool install --global GitVersion.Tool --version 6.4.0
 
-      - name: Setup PowerShell
-        if: matrix.ps-version == '7.x'
-        uses: actions/setup-powershell@v1
+      - name: Setup PowerShell 7.x
+        if: matrix.ps-version == '7.x' && runner.os == 'Linux'
+        run: |
+          # PowerShell 7.x is pre-installed on GitHub runners
+          pwsh --version
 
       - name: Install required PowerShell modules
         shell: pwsh
