@@ -11,22 +11,12 @@ env:
   DOTNET_CLI_TELEMETRY_OPTOUT: true
 
 jobs:
-  test:
-    name: Test PowerShell ${{ matrix.ps-version }} on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-        ps-version: ['5.1', '7.x']
-        exclude:
-          - os: ubuntu-latest
-            ps-version: '5.1'
-        # Optimize for PRs: skip macOS to reduce costs
-        include:
-          - os: ubuntu-latest
-            ps-version: '7.x'
-            primary: true
+  build:
+    name: Build Module
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.gitversion.outputs.version }}
+      semver: ${{ steps.gitversion.outputs.semver }}
     
     steps:
       - name: Checkout code
@@ -42,12 +32,6 @@ jobs:
       - name: Install GitVersion 6.4.0
         run: dotnet tool install --global GitVersion.Tool --version 6.4.0
 
-      - name: Setup PowerShell 7.x
-        if: matrix.ps-version == '7.x' && runner.os == 'Linux'
-        run: |
-          # PowerShell 7.x is pre-installed on GitHub runners
-          pwsh --version
-
       - name: Install required PowerShell modules
         shell: pwsh
         run: |
@@ -62,14 +46,17 @@ jobs:
         id: gitversion
         run: |
           Write-Host "Running GitVersion..." -ForegroundColor Green
-          $gitVersionRaw = dotnet-gitversion
-          Write-Host "GitVersion output:" -ForegroundColor Yellow
+          
+          # Suppress GitVersion logging to get clean JSON output
+          $gitVersionRaw = dotnet-gitversion /verbosity=Quiet
+          Write-Host "GitVersion JSON output:" -ForegroundColor Yellow
           Write-Host $gitVersionRaw
           
           try {
             $gitVersionOutput = $gitVersionRaw | ConvertFrom-Json
             $version = $gitVersionOutput.MajorMinorPatch
             $semver = $gitVersionOutput.SemVer
+            Write-Host "Successfully parsed GitVersion output" -ForegroundColor Green
           } catch {
             Write-Warning "GitVersion output could not be parsed as JSON. Using fallback version."
             Write-Host "Error: $_" -ForegroundColor Red
@@ -109,10 +96,44 @@ jobs:
           Write-Host "Building module with GitVersion..." -ForegroundColor Green
           ./build.ps1 -UseGitVersion
 
-      - name: Run Pester tests
+      - name: Upload module artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sol-module-${{ steps.gitversion.outputs.semver }}
+          path: output/
+          retention-days: 90
+          compression-level: 6
+
+  test:
+    name: Test PowerShell 5.1 on Windows
+    needs: [build]
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download module artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: sol-module-${{ needs.build.outputs.semver }}
+          path: output/
+
+      - name: Install required PowerShell modules
         shell: pwsh
         run: |
-          Write-Host "Running Pester tests..." -ForegroundColor Green
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          $modules = @('Pester')
+          foreach ($module in $modules) {
+            Write-Host "Installing $module..." -ForegroundColor Green
+            Install-Module $module -Force -SkipPublisherCheck -Scope CurrentUser
+          }
+
+      - name: Run Pester tests
+        shell: powershell
+        run: |
+          Write-Host "Running Pester tests on PowerShell 5.1..." -ForegroundColor Green
+          Write-Host "Module version: ${{ needs.build.outputs.version }}" -ForegroundColor Cyan
           
           # Configure Pester
           $pesterConfig = New-PesterConfiguration
@@ -143,22 +164,13 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: test-results-${{ matrix.os }}-ps${{ matrix.ps-version }}-${{ github.run_id }}
+          name: test-results-windows-ps5.1-${{ github.run_id }}
           path: |
             testResults.xml
             coverage.xml
           retention-days: 30
           compression-level: 6
           include-hidden-files: false
-
-      - name: Upload module artifact
-        if: matrix.primary == true
-        uses: actions/upload-artifact@v4
-        with:
-          name: sol-module-${{ steps.gitversion.outputs.semver }}
-          path: output/
-          retention-days: 90
-          compression-level: 6
 
   security-scan:
     name: Security Analysis
