@@ -35,8 +35,8 @@ jobs:
       - name: Install GitVersion 6.4.0
         run: dotnet tool install --global GitVersion.Tool --version 6.4.0
 
-      - name: Setup PowerShell
-        uses: actions/setup-powershell@v1
+      - name: Verify PowerShell
+        run: pwsh --version
 
       - name: Install required PowerShell modules
         shell: pwsh
