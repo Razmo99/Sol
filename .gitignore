@@ -4,6 +4,6 @@ packer_cache/
 # For built boxes
 *.box
 output/*
-# .bmad-core/*
-# docs/*
+.bmad-core/
+docs/
 # .gemini/*
