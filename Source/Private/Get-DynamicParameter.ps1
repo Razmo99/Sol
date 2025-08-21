@@ -25,12 +25,12 @@ function Get-DynamicParameter {
             )
 
             DynamicParam {
-                return Get-DynamicParameters -CommandName 'Get-ChildItem'
+                return Get-DynamicParameter -CommandName 'Get-ChildItem'
             }
 
             Process {
                 # Simple one-liner parameter extraction
-                $ChildItemParams = Get-DynamicParameterValues -CommandName 'Get-ChildItem' -BoundParameters $PSBoundParameters
+                $ChildItemParams = Get-DynamicParameterValue -CommandName 'Get-ChildItem' -BoundParameters $PSBoundParameters
 
                 # Call original command with enhanced functionality
                 $Results = Get-ChildItem @ChildItemParams
@@ -49,7 +49,7 @@ function Get-DynamicParameter {
     .EXAMPLE
         # Exclude specific parameters you want to handle differently
         DynamicParam {
-            return Get-DynamicParameters -CommandName 'Get-ADUser' -ExcludeParameters @('Server', 'Credential')
+            return Get-DynamicParameter -CommandName 'Get-ADUser' -ExcludeParameters @('Server', 'Credential')
         }
     #>
     [CmdletBinding()]
