@@ -41,9 +41,7 @@ runs:
 
     - name: Install GitVersion 5.12.0
       shell: bash
-      run: |
-        dotnet tool install --global GitVersion.Tool --version 5.12.0
-        echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+      run: dotnet tool install --global GitVersion.Tool --version 5.12.0
 
     - name: Install required PowerShell modules
       shell: ${{ inputs.powershell-version == '5.1' && 'powershell' || 'pwsh' }}
@@ -69,7 +67,8 @@ runs:
           $semver = $version
           Write-Host "Using manual version: $version"
         } else {
-          $gitVersionOutput = dotnet-gitversion | ConvertFrom-Json
+          # Use dotnet tool run to ensure GitVersion is found
+          $gitVersionOutput = dotnet tool run dotnet-gitversion | ConvertFrom-Json
           $version = $gitVersionOutput.MajorMinorPatch
           $semver = $gitVersionOutput.SemVer
           Write-Host "GitVersion: $version ($semver)"
