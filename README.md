@@ -1,5 +1,10 @@
 # Sol - A PowerShell Module
 
+[![CI](https://github.com/Razmo99/sol/workflows/CI/badge.svg)](https://github.com/Razmo99/sol/actions/workflows/ci.yml)
+[![Release](https://github.com/Razmo99/sol/workflows/Release/badge.svg)](https://github.com/Razmo99/sol/actions/workflows/release.yml)
+[![PowerShell Gallery](https://img.shields.io/powershellgallery/v/Sol.svg)](https://www.powershellgallery.com/packages/Sol)
+[![License](https://img.shields.io/github/license/Razmo99/sol.svg)](https://github.com/Razmo99/sol/blob/main/LICENSE)
+
 Sol is a PowerShell module that automates the creation of new company users in hybrid Microsoft 365 environments. It streamlines the process of creating users across on-premises Active Directory, Exchange Server, and Microsoft 365 systems.
 
 **Key Features:**

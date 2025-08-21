@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$SourcePath = (Join-Path -Path $PSScriptRoot -ChildPath 'Source'),
     [string]$OutputDirectory = (Join-Path -Path $PSScriptRoot -ChildPath 'output'),
     [switch]$UseGitVersion
@@ -51,7 +51,7 @@ $module = Build-Module @buildParams
 # Validate the built module can be imported
 if ($module) {
     Write-Host "Build completed successfully. Module: $($module.Name) Version: $($module.Version)" -ForegroundColor Green
-    
+
     # Test module import
     try {
         Import-Module $module.ModuleBase -Force -ErrorAction Stop
