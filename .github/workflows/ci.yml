@@ -40,9 +40,7 @@ jobs:
             'Pester', 
             'PSScriptAnalyzer', 
             'ModuleBuilder', 
-            @{Name='Logging'; RequiredVersion='4.8.5'}, 
-            'ActiveDirectory', 
-            'Microsoft.Graph'
+            @{Name='Logging'; RequiredVersion='4.8.5'}
           )
           foreach ($module in $modules) {
             if ($module -is [hashtable]) {
@@ -137,9 +135,7 @@ jobs:
           Set-PSRepository PSGallery -InstallationPolicy Trusted
           $modules = @(
             'Pester', 
-            @{Name='Logging'; RequiredVersion='4.8.5'}, 
-            'ActiveDirectory', 
-            'Microsoft.Graph'
+            @{Name='Logging'; RequiredVersion='4.8.5'}
           )
           foreach ($module in $modules) {
             if ($module -is [hashtable]) {
