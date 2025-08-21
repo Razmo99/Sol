@@ -24,7 +24,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup .NET 8 LTS for GitVersion
+      - name: Setup .NET 8 LTS
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
@@ -102,9 +102,9 @@ jobs:
           ./build.ps1 -UseGitVersion
 
       - name: Run Pester tests
-        shell: powershell
+        shell: pwsh
         run: |
-          Write-Host "Running Pester tests on PowerShell 5.1..." -ForegroundColor Green
+          Write-Host "Running Pester tests on PowerShell 7.x..." -ForegroundColor Green
           Write-Host "Module version: ${{ steps.gitversion.outputs.version }}" -ForegroundColor Cyan
           Write-Host "PowerShell Version: $($PSVersionTable.PSVersion)" -ForegroundColor Yellow
           
