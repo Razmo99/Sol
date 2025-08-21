@@ -40,7 +40,7 @@ jobs:
             'Pester', 
             'PSScriptAnalyzer', 
             'ModuleBuilder', 
-            @{Name='Logging'; RequiredVersion='4.8.5'}
+            'Logging'
           )
           foreach ($module in $modules) {
               Write-Host "Installing $module..." -ForegroundColor Green
