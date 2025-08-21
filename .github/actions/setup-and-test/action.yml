@@ -1,0 +1,122 @@
+name: 'Setup and Test PowerShell Module'
+description: 'Common setup and testing steps for PowerShell module CI/CD'
+
+inputs:
+  powershell-version:
+    description: 'PowerShell version to use'
+    required: false
+    default: '7.x'
+  run-tests:
+    description: 'Whether to run Pester tests'
+    required: false
+    default: 'true'
+  build-module:
+    description: 'Whether to build the module'
+    required: false
+    default: 'true'
+  manual-version:
+    description: 'Manual version override (skips GitVersion)'
+    required: false
+    default: ''
+  analyzer-severity:
+    description: 'PSScriptAnalyzer severity level'
+    required: false
+    default: 'Error,Warning'
+
+outputs:
+  version:
+    description: 'Version from GitVersion'
+    value: ${{ steps.gitversion.outputs.version }}
+  semver:
+    description: 'Semantic version from GitVersion'
+    value: ${{ steps.gitversion.outputs.semver }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup .NET 8 LTS
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Setup PowerShell ${{ inputs.powershell-version }}
+      uses: actions/setup-powershell@v1
+      with:
+        powershell-version: ${{ inputs.powershell-version }}
+      if: inputs.powershell-version != '7.x'
+
+    - name: Install GitVersion 5.12.0
+      shell: bash
+      run: dotnet tool install --global GitVersion.Tool --version 5.12.0
+
+    - name: Install required PowerShell modules
+      shell: pwsh
+      run: |
+        Set-PSRepository PSGallery -InstallationPolicy Trusted
+        $modules = @(
+          'Pester', 
+          'PSScriptAnalyzer', 
+          'ModuleBuilder', 
+          'Logging'
+        )
+        foreach ($module in $modules) {
+            Write-Host "Installing $module..." -ForegroundColor Green
+            Install-Module $module -Force -SkipPublisherCheck
+        }
+
+    - name: Get version information
+      id: gitversion
+      shell: pwsh
+      run: |
+        if ('${{ inputs.manual-version }}') {
+          $version = '${{ inputs.manual-version }}'
+          $semver = $version
+          Write-Host "Using manual version: $version"
+        } else {
+          $gitVersionOutput = dotnet-gitversion | ConvertFrom-Json
+          $version = $gitVersionOutput.MajorMinorPatch
+          $semver = $gitVersionOutput.SemVer
+          Write-Host "GitVersion: $version ($semver)"
+        }
+        
+        echo "version=$version" >> $env:GITHUB_OUTPUT
+        echo "semver=$semver" >> $env:GITHUB_OUTPUT
+
+    - name: Run PSScriptAnalyzer
+      shell: pwsh
+      run: |
+        Write-Host "Running PSScriptAnalyzer..." -ForegroundColor Green
+        $severityLevels = '${{ inputs.analyzer-severity }}' -split ','
+        $analysisResults = Invoke-ScriptAnalyzer -Path . -Recurse -Settings PSGallery -Severity $severityLevels
+        
+        if ($analysisResults) {
+          $analysisResults | Format-Table -AutoSize
+          $errorCount = ($analysisResults | Where-Object Severity -eq 'Error').Count
+          $warningCount = ($analysisResults | Where-Object Severity -eq 'Warning').Count
+          
+          Write-Host "PSScriptAnalyzer found $errorCount error(s) and $warningCount warning(s)" -ForegroundColor $(if($errorCount -gt 0) {'Red'} else {'Yellow'})
+          
+          if ($errorCount -gt 0) {
+            throw "PSScriptAnalyzer found $errorCount error(s) that must be fixed"
+          }
+        } else {
+          Write-Host "PSScriptAnalyzer found no issues" -ForegroundColor Green
+        }
+
+    - name: Build module
+      shell: pwsh
+      if: inputs.build-module == 'true'
+      run: |
+        Write-Host "Building module with GitVersion..." -ForegroundColor Green
+        ./build.ps1 -UseGitVersion
+
+    - name: Run Pester tests
+      shell: pwsh
+      if: inputs.run-tests == 'true'
+      run: |
+        Write-Host "Running Pester tests..." -ForegroundColor Green
+        $testResult = Invoke-Pester -Path './Tests' -PassThru
+        
+        if ($testResult.FailedCount -gt 0) {
+          throw "$($testResult.FailedCount) test(s) failed"
+        }
