@@ -43,13 +43,8 @@ jobs:
             @{Name='Logging'; RequiredVersion='4.8.5'}
           )
           foreach ($module in $modules) {
-            if ($module -is [hashtable]) {
-              Write-Host "Installing $($module.Name) version $($module.RequiredVersion)..." -ForegroundColor Green
-              Install-Module $module.Name -RequiredVersion $module.RequiredVersion -Force -SkipPublisherCheck -Scope CurrentUser
-            } else {
               Write-Host "Installing $module..." -ForegroundColor Green
-              Install-Module $module -Force -SkipPublisherCheck -Scope CurrentUser
-            }
+              Install-Module $module -Force -SkipPublisherCheck
           }
 
       - name: Get version from GitVersion
