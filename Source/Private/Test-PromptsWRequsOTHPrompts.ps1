@@ -1,4 +1,4 @@
-﻿function Test-PromptsWRequsOTHPrompts {
+﻿function Test-PromptsWRequsOTHPrompt {
     <#
     .SYNOPSIS
     Test Prompts With Requirements On Other Prompts

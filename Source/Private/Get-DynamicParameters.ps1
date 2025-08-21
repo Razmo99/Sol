@@ -1,7 +1,7 @@
-using namespace System.Management.Automation
+﻿using namespace System.Management.Automation
 using namespace System.Collections.Generic
 
-function Get-DynamicParameters {
+function Get-DynamicParameter {
     <#
     .SYNOPSIS
         Creates dynamic parameters for wrapping PowerShell commands with full IntelliSense support
@@ -23,29 +23,29 @@ function Get-DynamicParameters {
             param (
                 [Switch]$LogResults
             )
-            
+
             DynamicParam {
                 return Get-DynamicParameters -CommandName 'Get-ChildItem'
             }
-            
+
             Process {
                 # Simple one-liner parameter extraction
                 $ChildItemParams = Get-DynamicParameterValues -CommandName 'Get-ChildItem' -BoundParameters $PSBoundParameters
-                
+
                 # Call original command with enhanced functionality
                 $Results = Get-ChildItem @ChildItemParams
-                
+
                 if ($LogResults) {
                     Write-Log -Level Debug -Message "Found $($Results.Count) items"
                 }
-                
+
                 return $Results
             }
         }
-        
+
         # Usage: Get-MyChildItem -Path C:\temp -Filter "*.txt" -LogResults
         # All Get-ChildItem parameters available with IntelliSense!
-        
+
     .EXAMPLE
         # Exclude specific parameters you want to handle differently
         DynamicParam {
@@ -73,11 +73,11 @@ function Get-DynamicParameters {
 
             # Get common parameter names from the PowerShell framework
             $CommonParameterNames = [string[]][Internal.CommonParameters].GetProperties().Name
-            
+
             # Use generic list for performance
             $ExcludeList = [List[String]]::new()
             $ExcludeList.AddRange($ExcludeParameters)
-            
+
             if (!$IncludeCommonParameters) {
                 $ExcludeList.AddRange($CommonParameterNames)
             }

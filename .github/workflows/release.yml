@@ -132,7 +132,12 @@ jobs:
           $packagePath = './packages'
           New-Item -ItemType Directory -Path $packagePath -Force | Out-Null
           
-          # Create ZIP package
+          # Create proper NuGet package
+          Write-Host "Creating NuGet package..." -ForegroundColor Green
+          Register-PSRepository -Name 'LocalBuild' -SourceLocation $packagePath -PublishLocation $packagePath -InstallationPolicy 'Trusted'
+          Publish-Module -Path './output/sol' -Repository 'LocalBuild' -NuGetApiKey 'release-key' -Force -Verbose
+          
+          # Create ZIP package for compatibility
           $zipPath = Join-Path $packagePath "Sol-${{ steps.version.outputs.version }}.zip"
           Compress-Archive -Path "$outputPath/*" -DestinationPath $zipPath -Force
           Write-Host "Created ZIP package: $zipPath" -ForegroundColor Green
@@ -176,6 +181,12 @@ jobs:
           Get-ChildItem $packagePath | ForEach-Object {
               Write-Host "Package created: $($_.Name) ($([math]::Round($_.Length/1KB, 2)) KB)" -ForegroundColor Green
           }
+          
+          # Find and display the .nupkg file
+          $nupkgFile = Get-ChildItem $packagePath -Filter "*.nupkg" | Select-Object -First 1
+          if ($nupkgFile) {
+            Write-Host "NuGet package: $($nupkgFile.Name)" -ForegroundColor Green
+          }
 
       - name: Generate release notes
         id: release_notes
@@ -201,12 +212,16 @@ jobs:
           
           ### Installation
           
-          **Option 1: Direct Download**
+          **Option 1: PowerShell Gallery Package (Recommended)**
+          1. Download the ``.nupkg`` file
+          2. Install with: ``Install-Module -Path ./Sol.X.X.X.nupkg -Scope CurrentUser``
+          
+          **Option 2: Direct Download**
           1. Download the ``Sol-${{ steps.version.outputs.version }}.zip`` file
           2. Extract to your PowerShell modules directory
           3. Run ``Import-Module Sol``
           
-          **Option 2: Using Installation Script**
+          **Option 3: Using Installation Script**
           1. Download ``Install-Sol.ps1``
           2. Run ``./Install-Sol.ps1 -CurrentUser`` for user installation
           3. Run ``./Install-Sol.ps1`` for system-wide installation (requires admin)
@@ -253,6 +268,7 @@ jobs:
           name: release-assets-${{ steps.version.outputs.version }}
           path: |
             ./packages/Sol-${{ steps.version.outputs.version }}.zip
+            ./packages/*.nupkg
             ./packages/Install-Sol.ps1
             ./RELEASE_NOTES.md
           retention-days: 90
@@ -264,6 +280,18 @@ jobs:
           script: |
             const fs = require('fs');
             const path = require('path');
+            
+            // Find the .nupkg file dynamically
+            let nupkgFile = null;
+            try {
+              const packageFiles = fs.readdirSync('./packages');
+              const nupkgFiles = packageFiles.filter(f => f.endsWith('.nupkg'));
+              if (nupkgFiles.length > 0) {
+                nupkgFile = path.join('./packages', nupkgFiles[0]);
+              }
+            } catch (error) {
+              console.log('No packages directory or .nupkg files found');
+            }
             
             const assets = [
               {
@@ -282,6 +310,17 @@ jobs:
                 contentType: 'text/markdown'
               }
             ];
+            
+            // Add .nupkg file if it exists
+            if (nupkgFile) {
+              const nupkgName = path.basename(nupkgFile);
+              assets.push({
+                name: nupkgName,
+                path: nupkgFile,
+                contentType: 'application/zip'
+              });
+              console.log(`Adding NuGet package: ${nupkgName}`);
+            }
             
             for (const asset of assets) {
               const data = fs.readFileSync(asset.path);

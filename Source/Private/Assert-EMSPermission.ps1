@@ -1,4 +1,4 @@
-function Assert-EMSPermission {
+﻿function Assert-EMSPermission {
     <#
     .SYNOPSIS
         Asserts the current user can create a PSSession to the specified Exchange server
@@ -18,11 +18,11 @@ function Assert-EMSPermission {
     param (
         [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
         [String]$Server,
-        
+
         [Parameter(Mandatory = $false)]
         [ValidateSet('Default', 'Basic', 'Credssp', 'Digest', 'Kerberos', 'Negotiate', 'NegotiateWithImplicitCredential')]
         [String]$EMSAuth = "Kerberos",
-        
+
         [Parameter(Mandatory = $false)]
         [PSCredential]$Credential
     )

@@ -12,8 +12,11 @@ env:
 
 jobs:
   build-and-test:
-    name: Build and Test PowerShell Module
+    name: Build and Test PowerShell Module (PS ${{ matrix.powershell-version }})
     runs-on: windows-latest
+    strategy:
+      matrix:
+        powershell-version: ['5.1', '7.x']
     outputs:
       version: ${{ steps.gitversion.outputs.version }}
       semver: ${{ steps.gitversion.outputs.semver }}
@@ -28,6 +31,11 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+
+      - name: Setup PowerShell ${{ matrix.powershell-version }}
+        uses: actions/setup-powershell@v1
+        with:
+          powershell-version: ${{ matrix.powershell-version }}
 
       - name: Install GitVersion 5.12.0
         run: dotnet tool install --global GitVersion.Tool --version 5.12.0
@@ -101,79 +109,18 @@ jobs:
           Write-Host "Building module with GitVersion..." -ForegroundColor Green
           ./build.ps1 -UseGitVersion
 
+
       - name: Run Pester tests
         shell: pwsh
         run: |
-          Write-Host "Running Pester tests on PowerShell 7.x..." -ForegroundColor Green
-          Write-Host "Module version: ${{ steps.gitversion.outputs.version }}" -ForegroundColor Cyan
-          Write-Host "PowerShell Version: $($PSVersionTable.PSVersion)" -ForegroundColor Yellow
+          Write-Host "Running Pester tests..." -ForegroundColor Green
+          $testResult = Invoke-Pester -Path './Tests' -PassThru
           
-          # Debug: Check if Logging module is available
-          Write-Host "Debugging Logging module availability..." -ForegroundColor Yellow
-          try {
-            Import-Module Logging -Force -ErrorAction Stop
-            Write-Host "Logging module imported successfully" -ForegroundColor Green
-            Get-Module Logging | Format-List Name, Version, Path
-          } catch {
-            Write-Warning "Failed to import Logging module: $_"
-            Write-Host "Available modules:" -ForegroundColor Yellow
-            Get-Module -ListAvailable | Where-Object Name -like "*Log*" | Format-Table Name, Version, ModuleBase
-          }
-          
-          # Verify module exists and can be imported
-          Write-Host "Checking module availability..." -ForegroundColor Green
-          if (Test-Path './output/sol/sol.psd1') {
-            Write-Host "Module manifest found" -ForegroundColor Green
-            try {
-              Import-Module './output/sol' -Force -ErrorAction Stop
-              Write-Host "Module imported successfully" -ForegroundColor Green
-              Remove-Module sol -Force -ErrorAction SilentlyContinue
-            } catch {
-              Write-Warning "Module import test failed: $_"
-            }
-          } else {
-            Write-Warning "Module manifest not found at ./output/sol/sol.psd1"
-            Get-ChildItem ./output -Recurse | Select-Object FullName
-          }
-          
-          # Run tests with error handling
-          try {
-            # Use simpler Pester configuration for PowerShell 5.1 compatibility
-            $testResult = Invoke-Pester -Path './Tests' -PassThru -Show All
-            
-            Write-Host "Test Summary:" -ForegroundColor Green
-            Write-Host "  Total: $($testResult.TotalCount)" -ForegroundColor White
-            Write-Host "  Passed: $($testResult.PassedCount)" -ForegroundColor Green
-            Write-Host "  Failed: $($testResult.FailedCount)" -ForegroundColor $(if($testResult.FailedCount -gt 0) {'Red'} else {'Green'})
-            Write-Host "  Skipped: $($testResult.SkippedCount)" -ForegroundColor Yellow
-            
-            if ($testResult.FailedCount -gt 0) {
-              throw "$($testResult.FailedCount) test(s) failed"
-            }
-          } catch {
-            Write-Host "Pester execution failed: $_" -ForegroundColor Red
-            throw
+          if ($testResult.FailedCount -gt 0) {
+            throw "$($testResult.FailedCount) test(s) failed"
           }
 
-      - name: Upload module artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: sol-module-${{ steps.gitversion.outputs.semver }}
-          path: output/
-          retention-days: 90
-          compression-level: 6
 
-      - name: Upload test results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: test-results-windows-ps5.1-${{ github.run_id }}
-          path: |
-            testResults.xml
-            coverage.xml
-          retention-days: 30
-          compression-level: 6
-          include-hidden-files: false
 
   security-scan:
     name: Security Analysis
@@ -192,7 +139,7 @@ jobs:
         shell: pwsh
         run: |
           Set-PSRepository PSGallery -InstallationPolicy Trusted
-          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+          Install-Module PSScriptAnalyzer -Force
           $results = Invoke-ScriptAnalyzer -Path . -Recurse -Settings PSGallery -ReportSummary
           if ($results) {
             Write-Host "Security issues found:" -ForegroundColor Red
