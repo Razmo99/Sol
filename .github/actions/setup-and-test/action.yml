@@ -39,18 +39,12 @@ runs:
       with:
         dotnet-version: '8.0.x'
 
-    - name: Setup PowerShell ${{ inputs.powershell-version }}
-      uses: actions/setup-powershell@v1
-      with:
-        powershell-version: ${{ inputs.powershell-version }}
-      if: inputs.powershell-version != '7.x'
-
     - name: Install GitVersion 5.12.0
       shell: bash
       run: dotnet tool install --global GitVersion.Tool --version 5.12.0
 
     - name: Install required PowerShell modules
-      shell: pwsh
+      shell: ${{ inputs.powershell-version == '5.1' && 'powershell' || 'pwsh' }}
       run: |
         Set-PSRepository PSGallery -InstallationPolicy Trusted
         $modules = @(
@@ -66,7 +60,7 @@ runs:
 
     - name: Get version information
       id: gitversion
-      shell: pwsh
+      shell: ${{ inputs.powershell-version == '5.1' && 'powershell' || 'pwsh' }}
       run: |
         if ('${{ inputs.manual-version }}') {
           $version = '${{ inputs.manual-version }}'
@@ -83,7 +77,7 @@ runs:
         echo "semver=$semver" >> $env:GITHUB_OUTPUT
 
     - name: Run PSScriptAnalyzer
-      shell: pwsh
+      shell: ${{ inputs.powershell-version == '5.1' && 'powershell' || 'pwsh' }}
       run: |
         Write-Host "Running PSScriptAnalyzer..." -ForegroundColor Green
         $severityLevels = '${{ inputs.analyzer-severity }}' -split ','
@@ -104,14 +98,14 @@ runs:
         }
 
     - name: Build module
-      shell: pwsh
+      shell: ${{ inputs.powershell-version == '5.1' && 'powershell' || 'pwsh' }}
       if: inputs.build-module == 'true'
       run: |
         Write-Host "Building module with GitVersion..." -ForegroundColor Green
         ./build.ps1 -UseGitVersion
 
     - name: Run Pester tests
-      shell: pwsh
+      shell: ${{ inputs.powershell-version == '5.1' && 'powershell' || 'pwsh' }}
       if: inputs.run-tests == 'true'
       run: |
         Write-Host "Running Pester tests..." -ForegroundColor Green
