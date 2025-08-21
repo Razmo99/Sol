@@ -1,4 +1,4 @@
-function Wait-UntilTrue {
+﻿function Wait-UntilTrue {
     <#
     .SYNOPSIS
     Generic function that waits until a condition becomes true with timeout.
@@ -25,16 +25,16 @@ function Wait-UntilTrue {
     .EXAMPLE
     # Simple condition check
     Wait-UntilTrue -Condition { Test-Path "C:\temp\file.txt" } -TimeoutSeconds 30
-    
+
     .EXAMPLE
     # Using variables from parent scope - requires $using: scope modifier
     $UserName = "john.doe"
     $Domain = "contoso.com"
-    
-    Wait-UntilTrue -Condition { 
-        Get-ADUser -Identity $using:UserName -Server $using:Domain -ErrorAction SilentlyContinue 
+
+    Wait-UntilTrue -Condition {
+        Get-ADUser -Identity $using:UserName -Server $using:Domain -ErrorAction SilentlyContinue
     } -TimeoutSeconds 60 -Context "AD user sync for $UserName"
-    
+
     .EXAMPLE
     # Using splat parameters from parent scope
     $SplatParams = @{
@@ -42,7 +42,7 @@ function Wait-UntilTrue {
         Server = "contoso.com"
         ErrorAction = "SilentlyContinue"
     }
-    
+
     Wait-UntilTrue -Condition { Get-ADUser @using:SplatParams } `
                    -TimeoutSeconds 120 `
                    -Context "User validation"
@@ -52,28 +52,28 @@ function Wait-UntilTrue {
     param (
         [Parameter(Mandatory = $true)]
         [ScriptBlock]$Condition,
-        
+
         [Parameter(Mandatory = $false)]
         [int]$TimeoutSeconds = 120,
-        
+
         [Parameter(Mandatory = $false)]
         [int]$SleepSeconds = 5,
-        
+
         [Parameter(Mandatory = $false)]
         [string]$Context = "condition",
-        
+
         [Parameter(Mandatory = $false)]
         [string]$SuccessMessage,
-        
+
         [Parameter(Mandatory = $false)]
         [string]$TimeoutMessage
     )
-    
+
     Begin {}
-    
+
     Process {
         $TimeEnd = (Get-Date).AddSeconds($TimeoutSeconds)
-        
+
         if ($PSCmdlet.ShouldProcess($Context, "Wait for condition")) {
             while ($true) {
                 try {
@@ -89,7 +89,7 @@ function Wait-UntilTrue {
                 catch {
                     Write-Log -Level Debug -Message "Condition check failed: {0}" -Arguments $_.Exception.Message
                 }
-                
+
                 if ((Get-Date) -ge $TimeEnd) {
                     if ($TimeoutMessage) {
                         Write-Log -Level Warning -Message $TimeoutMessage
@@ -98,12 +98,12 @@ function Wait-UntilTrue {
                     }
                     return $false
                 }
-                
+
                 Write-Log -Level Debug -Message "Sleeping {0} seconds..." -Arguments $SleepSeconds
                 Start-Sleep -Seconds $SleepSeconds
             }
         }
     }
-    
+
     End {}
 }

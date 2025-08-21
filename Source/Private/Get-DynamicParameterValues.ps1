@@ -1,4 +1,4 @@
-function Get-DynamicParameterValues {
+﻿function Get-DynamicParameterValue {
     <#
     .SYNOPSIS
         Extracts dynamic parameter values from $PSBoundParameters for a specific command
@@ -17,15 +17,15 @@ function Get-DynamicParameterValues {
         function Get-MyChildItem {
             [CmdletBinding()]
             param ([Switch]$LogResults)
-            
+
             DynamicParam {
                 return Get-DynamicParameters -CommandName 'Get-ChildItem'
             }
-            
+
             Process {
                 # Simple one-liner parameter extraction
                 $ChildItemParams = Get-DynamicParameterValues -CommandName 'Get-ChildItem' -BoundParameters $PSBoundParameters
-                
+
                 $Results = Get-ChildItem @ChildItemParams
                 if ($LogResults) { Write-Host "Found $($Results.Count) items" }
                 return $Results
@@ -47,17 +47,17 @@ function Get-DynamicParameterValues {
 
     Process {
         $ExtractedParams = @{}
-        
+
         # Get dynamic parameter names for the command
         $DynamicParamNames = (Get-DynamicParameters -CommandName $CommandName -ExcludeParameters $ExcludeParameters).Keys
-        
+
         # Extract matching parameters from bound parameters
         foreach ($ParamName in $DynamicParamNames) {
             if ($BoundParameters.ContainsKey($ParamName)) {
                 $ExtractedParams[$ParamName] = $BoundParameters[$ParamName]
             }
         }
-        
+
         return $ExtractedParams
     }
 }

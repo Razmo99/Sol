@@ -1,4 +1,4 @@
-function Test-EMSConnected {
+﻿function Test-EMSConnected {
     <#
     .SYNOPSIS
         Tests if Exchange Management Shell connection is active and functional
@@ -14,8 +14,8 @@ function Test-EMSConnected {
 
     Process {
         # Find EMS session
-        $EMSSession = Get-PSSession | Where-Object { 
-            $_.State -eq 'Opened' -and $_.ConfigurationName -eq 'Microsoft.Exchange' 
+        $EMSSession = Get-PSSession | Where-Object {
+            $_.State -eq 'Opened' -and $_.ConfigurationName -eq 'Microsoft.Exchange'
         } | Select-Object -First 1
 
         # Check if EMS cmdlets are available

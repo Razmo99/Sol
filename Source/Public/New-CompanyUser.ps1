@@ -1,4 +1,4 @@
-function New-CompanyUser {
+﻿function New-CompanyUser {
     [CmdletBinding(SupportsShouldProcess = $true)]
     param (
         [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)][ValidateLength(1, 20)][string]$Firstname,
@@ -14,7 +14,7 @@ function New-CompanyUser {
         [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName = $true)][System.Collections.ArrayList]$MemberOf = @(),
         [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName = $true)][HashTable]$AutoMemberOf = @{},
         [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName = $true)][HashTable]$InteractivePrompts = @{},
-        
+
         [Parameter(Mandatory = $true)][String]$Domain,
         [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName = $true)][validateset('TRUE', 'FALSE')][string]$DistributionList = 'TRUE',
         [Parameter(Mandatory = $false)][PSCredential]$EMSCredentials,
@@ -84,11 +84,11 @@ function New-CompanyUser {
                     if (Assert-ADSyncPermission -Server $ADSyncServer -Credential $ADCredentials) {
                         $ADSyncCredentials = $ADCredentials
                         $ADSyncCredSet = $true
-                    }               
+                    }
                 }
                 else {
                     Write-Log -Level Error -Message 'Exiting; Provided active directory credentials insufficient.'
-                    exit                    
+                    exit
                 }
             }
         }
@@ -254,7 +254,7 @@ function New-CompanyUser {
             }
             # Convert the string variables to booleans
             [boolean]$DistributionList = [system.convert]::ToBoolean($DistributionList)
-            [boolean]$FileServerAccess = [system.convert]::ToBoolean($FileServerAccess)            
+            [boolean]$FileServerAccess = [system.convert]::ToBoolean($FileServerAccess)
             # Splat containing Parameters for Testing Interactive Prompts
             $SplatTestInteractivePrompts = @{
                 FileServerAccess = $FileServerAccess
@@ -279,14 +279,14 @@ function New-CompanyUser {
         #Turn the MemberOf variable to an array
         if ($MemberOf -contains ',' -and $MemberOf) {
             Write-Log -Level Debug -Message 'User is a MemberOf multiple groups, parsing groups.'
-            [System.Collections.ArrayList]$MemberOf = $MemberOf.Split(',')          
+            [System.Collections.ArrayList]$MemberOf = $MemberOf.Split(',')
         }
         elseif ($MemberOf -and $MemberOf -eq [System.String]) {
             [System.Collections.ArrayList]$MemberOf = @($MemberOf)
         }
         if ($PSCmdlet.MyInvocation.ExpectingInput) {
             [boolean]$DistributionList = [system.convert]::ToBoolean($DistributionList)
-            [boolean]$FileServerAccess = [system.convert]::ToBoolean($FileServerAccess)    
+            [boolean]$FileServerAccess = [system.convert]::ToBoolean($FileServerAccess)
         }
         #If FileServerAccess was set to True
         if ($FileServerAccess) {
@@ -312,7 +312,7 @@ function New-CompanyUser {
             $logonscript = $ADA.$Branch.logonscript
         }
         if ($MemberOf.count -gt 1) { $MemberOf = $MemberOf | Sort-Object -Property @{Expression = { $_.Trim() } } -Unique }
-        
+
         #Set variables for the Splat
         [string]$UserprincipalName = $SamAccountName + $EmailDomain
         #region Splatter
@@ -422,7 +422,7 @@ function New-CompanyUser {
                 Write-Log -Level Debug -Message "SplatADNewUser: Removed Empty Key: $Key"
             }
 
-        }        
+        }
         #endregion DataValidation
         #region DataConfirmation
         #Chance to confirm some account details
@@ -469,7 +469,7 @@ function New-CompanyUser {
                 #Wait for the user to Sync then set user attributes
                 if ((Wait-ADUSynced @SplatADUserSynced) -or $WhatIfPreference) {
                     Write-Log -Level Debug -Message "Found $SamAccountName in AD updating user Attributes"
-                    if ($PSCmdlet.ShouldProcess($DomainController, 'Set-ADUser -Server "' + $SplatADAttributes.Server + '" -Identity "' + $SplatADAttributes.Identity + '" -Office "' + $SplatADAttributes.Offic + '" -State "' + $SplatADAttributes.State + '" -Company "' + $SplatADAttributes.Company + '" -Manager "' + $SplatADAttributes.Manager + '" -Department "' + $SplatADAttributes.Department + '" -City "' + $SplatADAttributes.City + '" -Country "' + $SplatADAttributes.Country + '" -ScriptPath "' + $SplatADAttributes.ScriptPath + '" -PostalCode "' + $SplatADAttributes.PostalCode + '" -POBox "' + $SplatADAttributes.POBox + '" -StreetAddress "' + $SplatADAttributes.StreetAddress + '" -OfficePhone "' + $SplatADAttributes.OfficePhone + '" -MobilePhone "' + $SplatADAttributes.MobilePhone + '" -Title "' + $SplatADAttributes.Title)) {                
+                    if ($PSCmdlet.ShouldProcess($DomainController, 'Set-ADUser -Server "' + $SplatADAttributes.Server + '" -Identity "' + $SplatADAttributes.Identity + '" -Office "' + $SplatADAttributes.Offic + '" -State "' + $SplatADAttributes.State + '" -Company "' + $SplatADAttributes.Company + '" -Manager "' + $SplatADAttributes.Manager + '" -Department "' + $SplatADAttributes.Department + '" -City "' + $SplatADAttributes.City + '" -Country "' + $SplatADAttributes.Country + '" -ScriptPath "' + $SplatADAttributes.ScriptPath + '" -PostalCode "' + $SplatADAttributes.PostalCode + '" -POBox "' + $SplatADAttributes.POBox + '" -StreetAddress "' + $SplatADAttributes.StreetAddress + '" -OfficePhone "' + $SplatADAttributes.OfficePhone + '" -MobilePhone "' + $SplatADAttributes.MobilePhone + '" -Title "' + $SplatADAttributes.Title)) {
                         Set-ADUser @SplatADAttributes
                         Get-ADUser @SplatADGetUser
                     }

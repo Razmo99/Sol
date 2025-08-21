@@ -1,4 +1,4 @@
-function Sync-Directory {
+﻿function Sync-Directory {
     <#
     .SYNOPSIS
     Sync AD or Microsoft Graph with each other
@@ -62,18 +62,18 @@ function Sync-Directory {
             Invoke-Command -Session $EntraIDSession -ScriptBlock {
                 $VerbosePreference = 'Continue'
                 Import-Module -Name 'ADSync' -Function Get-ADSyncConnectorRunStatus, Start-ADSyncSyncCycle
-                
+
                 # Use Wait-UntilTrue to wait for sync completion, then start new cycle
-                $SyncCompleted = Wait-UntilTrue -Condition { 
-                    !(Get-ADSyncConnectorRunStatus) 
+                $SyncCompleted = Wait-UntilTrue -Condition {
+                    !(Get-ADSyncConnectorRunStatus)
                 } -TimeoutSeconds 120 -SleepSeconds 10 -Context "EntraID sync completion"
-                
+
                 if (!$SyncCompleted) {
                     Write-Log -Level Warning -Message 'Timeout waiting for EntraID sync to complete'
                     Write-Log -Level Error -Message 'User Creation will not continue past this point'
                     return $false
                 }
-                
+
                 try {
                     Start-ADSyncSyncCycle -PolicyType Delta -ErrorAction Stop
                     return $true

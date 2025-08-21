@@ -1,6 +1,6 @@
-using namespace System.Management.Automation
+﻿using namespace System.Management.Automation
 
-# Import module directly 
+# Import module directly
 Import-Module ./output/sol -Force
 
 InModuleScope 'sol' {
@@ -42,7 +42,7 @@ InModuleScope 'sol' {
             It "Should detect CommonParameters correctly" {
                 # Test the actual CommonParameters used by the function
                 $CommonParams = [string[]][Internal.CommonParameters].GetProperties().Name
-                
+
                 $CommonParams | Should -Not -BeNullOrEmpty
                 $CommonParams | Should -Contain 'Verbose'
                 $CommonParams | Should -Contain 'Debug'
@@ -69,21 +69,21 @@ InModuleScope 'sol' {
         Context "Verification" {
             It "Should show correct parameter counts" {
                 Write-Host "`n=== Dynamic Parameter Verification ===" -ForegroundColor Green
-                
+
                 # Check Get-ChildItem original parameters
                 $OriginalCommand = Get-Command -Name 'Get-ChildItem'
                 Write-Host "Original Get-ChildItem parameter count: $($OriginalCommand.Parameters.Count)" -ForegroundColor Cyan
-                
+
                 # Check our dynamic parameters
                 $DynamicParams = Get-DynamicParameters -CommandName 'Get-ChildItem'
                 Write-Host "Generated dynamic parameter count: $($DynamicParams.Count)" -ForegroundColor Yellow
                 Write-Host "Sample dynamic parameters: $($DynamicParams.Keys | Select-Object -First 5 | Join-String -Separator ', ')" -ForegroundColor Yellow
-                
+
                 # Verify math: Original - Common = Dynamic
                 $CommonParams = [string[]][Internal.CommonParameters].GetProperties().Name
                 $ExpectedCount = $OriginalCommand.Parameters.Count - $CommonParams.Count
                 Write-Host "Expected dynamic count: $ExpectedCount (Original: $($OriginalCommand.Parameters.Count) - Common: $($CommonParams.Count))" -ForegroundColor Green
-                
+
                 $DynamicParams.Count | Should -Be $ExpectedCount
             }
         }

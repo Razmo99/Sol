@@ -1,4 +1,4 @@
-function New-ManagedPSSession {
+﻿function New-ManagedPSSession {
     <#
     .SYNOPSIS
         Creates a PowerShell session with standardized error handling and credential management
@@ -11,7 +11,7 @@ function New-ManagedPSSession {
         System.Management.Automation.Runspaces.PSSession
     .EXAMPLE
         New-ManagedPSSession -ComputerName "Server01" -PromptForCredentials
-    .EXAMPLE  
+    .EXAMPLE
         New-ManagedPSSession -ConnectionUri "http://exchange01/powershell" -ConfigurationName "Microsoft.Exchange"
     .EXAMPLE
         # All New-PSSession parameters available with IntelliSense:
@@ -33,12 +33,12 @@ function New-ManagedPSSession {
         $SessionParameters = Get-DynamicParameterValues -CommandName 'New-PSSession' -BoundParameters $PSBoundParameters
 
         # Determine target for logging
-        $TargetName = if ($SessionParameters.ContainsKey('ConnectionUri')) { 
-            $SessionParameters['ConnectionUri'] 
-        } elseif ($SessionParameters.ContainsKey('ComputerName')) { 
-            $SessionParameters['ComputerName'] 
-        } else { 
-            'localhost' 
+        $TargetName = if ($SessionParameters.ContainsKey('ConnectionUri')) {
+            $SessionParameters['ConnectionUri']
+        } elseif ($SessionParameters.ContainsKey('ComputerName')) {
+            $SessionParameters['ComputerName']
+        } else {
+            'localhost'
         }
 
         # Guard: WhatIf check
@@ -57,7 +57,7 @@ function New-ManagedPSSession {
                 Write-Log -Level Error -Message "PSRemoting transport error: $($_.Exception.Message)" -ExceptionInfo $_
                 throw
             }
-            
+
             if (!$PromptForCredentials -or $SessionParameters.ContainsKey('Credential')) {
                 Write-Log -Level Error -Message "Access denied connecting to $TargetName" -ExceptionInfo $_
                 throw
@@ -66,7 +66,7 @@ function New-ManagedPSSession {
             # Prompt for alternative credentials
             Write-Log -Level Warning -Message "Authentication failed for $TargetName, prompting for credentials"
             $AlternativeCredential = Get-Credential -Message "Enter credentials for $TargetName"
-            
+
             if (!$AlternativeCredential) {
                 Write-Log -Level Error -Message "No alternative credentials provided"
                 throw
