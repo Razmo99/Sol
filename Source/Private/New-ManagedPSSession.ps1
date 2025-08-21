@@ -25,12 +25,12 @@
     )
 
     DynamicParam {
-        return Get-DynamicParameters -CommandName 'New-PSSession'
+        return Get-DynamicParameter -CommandName 'New-PSSession'
     }
 
     Process {
         # Extract New-PSSession parameters using our utility
-        $SessionParameters = Get-DynamicParameterValues -CommandName 'New-PSSession' -BoundParameters $PSBoundParameters
+        $SessionParameters = Get-DynamicParameterValue -CommandName 'New-PSSession' -BoundParameters $PSBoundParameters
 
         # Determine target for logging
         $TargetName = if ($SessionParameters.ContainsKey('ConnectionUri')) {

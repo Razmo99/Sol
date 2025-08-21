@@ -50,7 +50,7 @@ function Test-InteractivePrompt {
 
     # If Prompts without Requirements process them.
     if ($PWOReqs) {
-        $Test_PWOReqs = Test-Prompts -Prompts $PWOReqs
+        $Test_PWOReqs = Test-Prompt -Prompts $PWOReqs
         if ($Test_PWOReqs) {
             # Add any results to the result variables
             $Test_PWOReqs.GetEnumerator() | ForEach-Object { $ResultsWOReqs.Add($_.key, $_.Value) }
@@ -66,12 +66,12 @@ function Test-InteractivePrompt {
     }
     # Prompts with Requirements and with Requirements on other Prompts exist lets process them.
     if ($PWReqsWReqsOTHP) {
-        $Test_PWReqsWReqsOTHP = Test-PromptsWRequsOTHPrompts -prompts $PWReqsWReqsOTHP -FileServerAccess $FileServerAccess -M365License $M365License -ResultsWOReqs $ResultsWOReqs
+        $Test_PWReqsWReqsOTHP = Test-PromptsWRequsOTHPrompt -prompts $PWReqsWReqsOTHP -FileServerAccess $FileServerAccess -M365License $M365License -ResultsWOReqs $ResultsWOReqs
         if ($Test_PWReqsWReqsOTHP) {
             # Convert any results for Topological sorting
             $Convert_Prompts = Convert-InteractivePromptsForTopologicalSort $Test_PWReqsWReqsOTHP
             # Topologicaly sort and resolve the prompts
-            $Resolve_PWReqsWReqsOTHP = Resolve-Prompts -Prompts $Convert_Prompts -OriginalPrompts $InteractivePrompts
+            $Resolve_PWReqsWReqsOTHP = Resolve-Prompt -Prompts $Convert_Prompts -OriginalPrompts $InteractivePrompts
             if ($Resolve_PWReqsWReqsOTHP) {
                 # Add any results to the result variables
                 $Resolve_PWReqsWReqsOTHP.GetEnumerator() | ForEach-Object { $ResultsWReqsWReqsOTHP.Add($_.key, $_.Value) }

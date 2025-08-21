@@ -19,12 +19,12 @@
             param ([Switch]$LogResults)
 
             DynamicParam {
-                return Get-DynamicParameters -CommandName 'Get-ChildItem'
+                return Get-DynamicParameter -CommandName 'Get-ChildItem'
             }
 
             Process {
                 # Simple one-liner parameter extraction
-                $ChildItemParams = Get-DynamicParameterValues -CommandName 'Get-ChildItem' -BoundParameters $PSBoundParameters
+                $ChildItemParams = Get-DynamicParameterValue -CommandName 'Get-ChildItem' -BoundParameters $PSBoundParameters
 
                 $Results = Get-ChildItem @ChildItemParams
                 if ($LogResults) { Write-Host "Found $($Results.Count) items" }
@@ -49,7 +49,7 @@
         $ExtractedParams = @{}
 
         # Get dynamic parameter names for the command
-        $DynamicParamNames = (Get-DynamicParameters -CommandName $CommandName -ExcludeParameters $ExcludeParameters).Keys
+        $DynamicParamNames = (Get-DynamicParameter -CommandName $CommandName -ExcludeParameters $ExcludeParameters).Keys
 
         # Extract matching parameters from bound parameters
         foreach ($ParamName in $DynamicParamNames) {
