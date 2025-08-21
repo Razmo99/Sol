@@ -154,6 +154,18 @@ jobs:
           Write-Host "Module version: ${{ needs.build.outputs.version }}" -ForegroundColor Cyan
           Write-Host "PowerShell Version: $($PSVersionTable.PSVersion)" -ForegroundColor Yellow
           
+          # Debug: Check if Logging module is available
+          Write-Host "Debugging Logging module availability..." -ForegroundColor Yellow
+          try {
+            Import-Module Logging -Force -ErrorAction Stop
+            Write-Host "Logging module imported successfully" -ForegroundColor Green
+            Get-Module Logging | Format-List Name, Version, Path
+          } catch {
+            Write-Warning "Failed to import Logging module: $_"
+            Write-Host "Available modules:" -ForegroundColor Yellow
+            Get-Module -ListAvailable | Where-Object Name -like "*Log*" | Format-Table Name, Version, ModuleBase
+          }
+          
           # Verify module exists and can be imported
           Write-Host "Checking module availability..." -ForegroundColor Green
           if (Test-Path './output/sol/sol.psd1') {
