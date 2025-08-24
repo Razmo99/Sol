@@ -1,8 +1,7 @@
 ﻿param(
     [string]$SourcePath = (Join-Path -Path $PSScriptRoot -ChildPath 'Source'),
     [string]$OutputDirectory = (Join-Path -Path $PSScriptRoot -ChildPath 'output'),
-    [switch]$UseGitVersion,
-    [bool]$UnversionedOutputDirectory=$true
+    [switch]$UseGitVersion
 )
 
 # Get version from GitVersion if available and requested
@@ -30,7 +29,7 @@ if ($UseGitVersion) {
 $buildParams = @{
     Path                       = $SourcePath
     OutputDirectory            = $OutputDirectory
-    UnversionedOutputDirectory = $UnversionedOutputDirectory
+    UnversionedOutputDirectory = $true
     Suffix                     = "./build.suffix.ps1"
     Prefix                     = "./build.prefix.ps1"
 }
