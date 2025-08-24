@@ -39,7 +39,7 @@ jobs:
           analyzer-severity: 'Error,Warning'  # Can be set to 'none' to skip PSScriptAnalyzer
           test-path: 'Tests'
           code-coverage: 'true'
-          code-coverage-path: 'Source'
+          code-coverage-path: 'output'
           test-report-name: 'Test Results - PS ${{ matrix.powershell-version }}'
           test-report-title: 'PowerShell ${{ matrix.powershell-version }} Test Results'
       
