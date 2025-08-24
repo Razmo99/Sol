@@ -120,25 +120,14 @@ runs:
         github_token: ${{ github.token }}
         tests_fail_step: true
         skip_check_run: true # Our test results are too large
-
-    # Upload test results as artifact for additional processing
-    - name: Upload test results
-      uses: actions/upload-artifact@v4
-      if: always() && inputs.run-tests == 'true'
-      with:
-        name: test-results-${{ inputs.powershell-version }}
-        path: |
-          ${{ steps.test-report.outputs.test_results_path }}
-          ${{ steps.test-report.outputs.coverage_results_path }}
-        retention-days: 30
-
-    # Output test summary
-    - name: Test Summary
-      if: always() && inputs.run-tests == 'true'
+    
+    - name: Summarize test results
       shell: pwsh
-      run: |
-        Write-Host "## Test Results Summary" -ForegroundColor Cyan
-        Write-Host "Total Tests: ${{ steps.test-report.outputs.total_count }}"
-        Write-Host "Passed: ${{ steps.test-report.outputs.passed_count }}" -ForegroundColor Green
-        Write-Host "Failed: ${{ steps.test-report.outputs.failed_count }}" -ForegroundColor $(if('${{ steps.test-report.outputs.failed_count }}' -eq '0') {'Green'} else {'Red'})
-        Write-Host "Result: ${{ steps.test-report.outputs.result_value }}" -ForegroundColor $(if('${{ steps.test-report.outputs.result_value }}' -eq 'Passed') {'Green'} else {'Red'})
+      run: | # PowerShell
+        Write-ActionInfo 'Total Tests Executed...:  ${{ steps.pester.outputs.total_count }}'
+        Write-ActionInfo 'Total Tests Passed.....:  ${{ steps.pester.outputs.passed_count }}'
+        if (${{ steps.pester.outputs.failed_count }} -gt 0) {
+          Set-ActionFailed 'Total Tests Failed.....:  ${{ steps.pester.outputs.failed_count }}'
+        } else {
+          Write-ActionInfo 'Total Tests Failed.....:  ${{ steps.pester.outputs.failed_count }}'
+        }
