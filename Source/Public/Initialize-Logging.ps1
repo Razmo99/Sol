@@ -39,7 +39,7 @@ function Initialize-Logging {
     Set-LoggingDefaultLevel -Level $Level
 
     Add-LoggingTarget -Name Console -Configuration @{
-        ColorMapping = $color_mapping
+        ColorMapping = $LogColors
         level = $Level
     }
 
