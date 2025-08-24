@@ -67,8 +67,8 @@ runs:
           $semver = $version
           Write-Host "Using manual version: $version"
         } else {
-          # Use dotnet tool run to ensure GitVersion is found
-          $gitVersionOutput = dotnet tool run dotnet-gitversion | ConvertFrom-Json
+          # Use dotnet tool run with --global flag for globally installed tools
+          $gitVersionOutput = dotnet tool run --global dotnet-gitversion | ConvertFrom-Json
           $version = $gitVersionOutput.MajorMinorPatch
           $semver = $gitVersionOutput.SemVer
           Write-Host "GitVersion: $version ($semver)"
