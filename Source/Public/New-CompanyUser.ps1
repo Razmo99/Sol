@@ -33,9 +33,15 @@
         $CurrentPath = Split-Path -Path $PSCmdlet.MyInvocation.PSCommandPath -Parent
         Initialize-Logging -LogFilePath $CurrentPath -LogFileNamePrefix $Domain
         Write-Log -Level Debug -Message "Working Directory is: $CurrentPath"
+        
         #Get a domain controller to execute all AD commands on
         try {
-            $DomainController = (Get-ADDomainController -Discover -Domain $Domain -Service "PrimaryDC" -ErrorAction Stop).Hostname.Value
+            if ($PSCmdlet.ShouldProcess("$Domain", "Get-ADDomainController")) {
+                $DomainController = (Get-ADDomainController -Discover -Domain $Domain -Service "PrimaryDC" -ErrorAction Stop).Hostname.Value    
+            }else{
+                $DomainController = $Domain
+            }
+            
             Write-Log -Level Debug -Message "Executing AD commands on: $DomainController"
         }
         catch {
@@ -182,7 +188,7 @@
                     if (!$Manager) {
                         $Finished = $true
                     }
-                    elseif (!(Assert-ADUExists -SamAccountName $Manager -Server $DomainController) -and $Finished -eq $true -and !$WhatIfPreference) {
+                    elseif (!(Assert-ADUExist -SamAccountName $Manager -Server $DomainController) -and $Finished -eq $true -and !$WhatIfPreference) {
                         $Finished = $false
                     }
                 } until ($Finished -eq $true)
@@ -460,14 +466,15 @@
         #All Variables have been collected and formatted how we wanted. Now lets make the account.
         #region Hybrid
         if ($M365DeploymentType -eq 'Hybrid') {
-            if (!(Assert-EMSUExists -SamAccountName $SamAccountName -Server $EMSServer -Credential $EMSCredentials -WhatIf:$WhatIfPreference)) {
+            if (!(Assert-EMSUExist -SamAccountName $SamAccountName -Server $EMSServer -Credential $EMSCredentials -WhatIf:$WhatIfPreference)) {
                 Write-Log -Level Info -Message 'This user will be created using Microsoft 365 Hybrid deployment.'
                 Write-Log -Level Debug -Message "$SamAccountName does not exist on EMS; proceeding"
                 if ($PSCmdlet.ShouldProcess($EMSServer, 'New-RemoteMailbox -Password "' + $SplatExchange.Password + '" -Name "' + $SplatExchange.Name + '" UserprincipalName "' + $SplatExchange.UserPrincipalName + '" Alias "' + $SplatExchange.Alias + '" DisplayName "' + $SplatExchange.DisplayName + '" Firstname "' + $SplatExchange.Firstname + '" Lastname "' + $SplatExchange.Lastname + '" OnPremisesOrganizationalUnit "' + $SplatExchange.OnPremisesOrganizationalUnit + '" SamAccountName "' + $SplatExchange.SamAccountName + '" Archive "' + $SplatExchange.Archive + '" DomainController "' + $SplatExchange.DomainController)) {
                     New-RemoteMailbox @SplatExchange -ErrorAction Stop
                 }
                 #Wait for the user to Sync then set user attributes
-                if ((Wait-ADUSynced @SplatADUserSynced) -or $WhatIfPreference) {
+                
+                if ((Wait-UntilTrue -Condition { Assert-MgUserExist -UserPrincipalName $using:UserprincipalName } -TimeoutSeconds 120 -Context "Microsoft Graph user sync for $UserprincipalName") -or $WhatIfPreference) {
                     Write-Log -Level Debug -Message "Found $SamAccountName in AD updating user Attributes"
                     if ($PSCmdlet.ShouldProcess($DomainController, 'Set-ADUser -Server "' + $SplatADAttributes.Server + '" -Identity "' + $SplatADAttributes.Identity + '" -Office "' + $SplatADAttributes.Offic + '" -State "' + $SplatADAttributes.State + '" -Company "' + $SplatADAttributes.Company + '" -Manager "' + $SplatADAttributes.Manager + '" -Department "' + $SplatADAttributes.Department + '" -City "' + $SplatADAttributes.City + '" -Country "' + $SplatADAttributes.Country + '" -ScriptPath "' + $SplatADAttributes.ScriptPath + '" -PostalCode "' + $SplatADAttributes.PostalCode + '" -POBox "' + $SplatADAttributes.POBox + '" -StreetAddress "' + $SplatADAttributes.StreetAddress + '" -OfficePhone "' + $SplatADAttributes.OfficePhone + '" -MobilePhone "' + $SplatADAttributes.MobilePhone + '" -Title "' + $SplatADAttributes.Title)) {
                         Set-ADUser @SplatADAttributes
@@ -475,7 +482,7 @@
                     }
                     #Add the user to specified groups
                     if ($MemberOf) {
-                        Set-ADUGroups @SplatADGroups
+                        Set-ADUGroup @SplatADGroups
                     }
                     else {
                         Write-Log -Level Debug -Message 'No groups specified'
@@ -489,7 +496,7 @@
                     Test-MgConnected -UserPrincipalName $CurrentUser
                 }
                 Write-Log -Level Info -Message 'Starting Entra Connect Sync'
-                if ((Sync-Directories -Server $ADSyncServer -Credential $ADSyncCredentials -EntraID -ErrorAction Stop -Whatif:$WhatIfPreference) -or $WhatIfPreference) {
+                if ((Sync-Directory -Server $ADSyncServer -Credential $ADSyncCredentials -EntraID -ErrorAction Stop -Whatif:$WhatIfPreference) -or $WhatIfPreference) {
                     if ((Wait-UntilTrue -Condition { Assert-MgUserExist -UserPrincipalName $using:UserprincipalName } -TimeoutSeconds 120 -Context "Microsoft Graph user sync for $UserprincipalName") -or $WhatIfPreference) {
                         if ($M365License) {
                             Write-Log -Level Debug -Message "Trying to assign a $M365License License to $UserprincipalName"
@@ -510,7 +517,7 @@
         }
         #endregion Hybrid
         #Region Cloud
-        if (!(Assert-ADUExists -SamAccountName $SamAccountName -Server $DomainController -Credential $EMSCredentials -WhatIf:$WhatIfPreference) -and ($M365DeploymentType -eq 'Cloud')) {
+        if (!(Assert-ADUExist -SamAccountName $SamAccountName -Server $DomainController -Credential $EMSCredentials -WhatIf:$WhatIfPreference) -and ($M365DeploymentType -eq 'Cloud')) {
             Write-Log -Level Info -Message 'This user will be created using Microsoft 365 Cloud deployment.'
             Write-Log -Level Debug -Message "$SamAccountName does not exist on AD; proceeding"
             if ($PSCmdlet.ShouldProcess($DomainController, 'New-ADuser -Password "' + $SplatADNewUser.AccountPassword + '" -Name "' + $SplatADNewUser.Name + '" UserprincipalName "' + $SplatADNewUser.UserPrincipalName + '" DisplayName "' + $SplatADNewUser.DisplayName + '" GivenName "' + $SplatADNewUser.GivenName + '" Surname "' + $SplatADNewUser.Surname + '" Path "' + $SplatADNewUser.Path + '" SamAccountName "' + $SplatADNewUser.SamAccountName + '" Server "' + $SplatADNewUser.Server + ' -Office "' + $SplatADNewUser.Office + '" -State "' + $SplatADNewUser.State + '" -Company "' + $SplatADNewUser.Company + '" -Manager "' + $SplatADNewUser.Manager + '" -Department "' + $SplatADNewUser.Department + '" -City "' + $SplatADNewUser.City + '" -Country "' + $SplatADNewUser.Country + '" -ScriptPath "' + $SplatADNewUser.ScriptPath + '" -PostalCode "' + $SplatADNewUser.PostalCode + '" -POBox "' + $SplatADNewUser.POBox + '" -StreetAddress "' + $SplatADNewUser.StreetAddress + '" -OfficePhone "' + $SplatADNewUser.OfficePhone + '" -MobilePhone "' + $SplatADNewUser.MobilePhone + '" -Title "' + $SplatADNewUser.Title)) {
@@ -520,7 +527,7 @@
             #Wait for user to Sync to Active Directory
             if ((Wait-ADUSynced @SplatADUserSynced) -or $WhatIfPreference) {
                 if ($MemberOf) {
-                    Set-ADUGroups @SplatADGroups
+                    Set-ADUGroup @SplatADGroups
                 }
                 else {
                     Write-Log -Level Debug -Message 'No groups specified'
@@ -534,7 +541,7 @@
                 Test-MgConnected -UserPrincipalName $CurrentUser
             }
             Write-Log -Level Info -Message 'Starting Entra Connect Sync'
-            if ((Sync-Directories -Server $ADSyncServer -Credential $ADSyncCredentials -EntraID -ErrorAction Stop -Whatif:$WhatIfPreference) -or $WhatIfPreference) {
+            if ((Sync-Directory -Server $ADSyncServer -Credential $ADSyncCredentials -EntraID -ErrorAction Stop -Whatif:$WhatIfPreference) -or $WhatIfPreference) {
                 if ((Wait-UntilTrue -Condition { Assert-MgUserExist -UserPrincipalName $using:UserprincipalName } -TimeoutSeconds 120 -Context "Microsoft Graph user sync for $UserprincipalName") -or $WhatIfPreference) {
                     if ($M365License) {
                         Write-Log -Level Debug -Message "Trying to assign a $M365License License to $UserprincipalName"
@@ -554,7 +561,5 @@
         }
         #endregion Cloud
     }
-    end {
-        # Cleanup and finalization handled by logging module
-    }
+    end {}
 }
