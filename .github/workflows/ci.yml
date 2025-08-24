@@ -40,14 +40,3 @@ jobs:
           test-path: 'Tests'
           test-report-name: 'Test Results - PS ${{ matrix.powershell-version }}'
           test-report-title: 'PowerShell ${{ matrix.powershell-version }} Test Results'
-      
-      # Optional: Display test summary in job summary
-      - name: Test Summary
-        if: always()
-        run: |
-          Write-Host "## PowerShell ${{ matrix.powershell-version }} Results" -ForegroundColor Cyan
-          Write-Host "Version: ${{ steps.setup-and-test.outputs.version }}"
-          Write-Host "SemVer: ${{ steps.setup-and-test.outputs.semver }}"
-          Write-Host "Tests Passed: ${{ steps.setup-and-test.outputs.tests-passed }}"
-          Write-Host "Tests Failed: ${{ steps.setup-and-test.outputs.tests-failed }}"
-        shell: pwsh
