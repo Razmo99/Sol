@@ -7,6 +7,7 @@
         Write-Log -Level Info -Message 'Branches'
         Write-Log -Level Info -Message '--------'
         $Branches.ChildNodes | ForEach-Object { Write-Log -Level Info -Message $_.Name }
+        Wait-Logging
         $UserBranch = Read-Host -Prompt 'Enter User Branch?'
         if ($Branches.$UserBranch.name -contains $UserBranch) {
         }
