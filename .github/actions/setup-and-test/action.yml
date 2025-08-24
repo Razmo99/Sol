@@ -145,27 +145,12 @@ runs:
       run: |
         Write-Host "Building module version: $env:GITVERSION_SEMVER" -ForegroundColor Green
         
-        # Check for build script
-        if (Test-Path ./build.ps1) {
-            # Run build script with common parameters
-            $buildParams = @{}
-            
-            # Add version parameter if the script accepts it
-            $buildScript = Get-Command ./build.ps1
-            if ($buildScript.Parameters.ContainsKey('Version')) {
-                $buildParams['Version'] = $env:GITVERSION_SEMVER
+            $buildParams = @{
+                UseGitVersion:$true
+                UnversionedOutputDirectory:$false
             }
             
             ./build.ps1 @buildParams
-        } elseif (Test-Path ./Source/*.psd1) {
-            # Use ModuleBuilder directly if no build script exists
-            Write-Host "Using ModuleBuilder to compile module" -ForegroundColor Yellow
-            
-            $moduleName = (Get-ChildItem ./Source/*.psd1 | Select-Object -First 1).BaseName
-            Build-Module -SourcePath "./Source/$moduleName.psd1" -OutputDirectory ./Output -Version $env:GITVERSION_SEMVER
-        } else {
-            Write-Warning "No build.ps1 or Source/*.psd1 found, skipping build step"
-        }
 
     # Use zyborg's pester-tests-report for rich test reporting
     - name: Run Pester tests with reporting
