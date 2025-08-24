@@ -22,14 +22,6 @@ inputs:
     description: "Path to Pester tests"
     required: false
     default: "Tests"
-  code-coverage:
-    description: "Enable code coverage"
-    required: false
-    default: "true"
-  code-coverage-path:
-    description: "Path to source files for code coverage"
-    required: false
-    default: "Source"
   test-report-name:
     description: "Name for the test report"
     required: false
@@ -77,21 +69,8 @@ runs:
         useConfigFile: true
         configFilePath: ./GitVersion.yml
 
-    # Simple PowerShell module installation
-    - name: Install Required PowerShell Modules
-      shell: pwsh
-      run: |
-        Write-Host "Installing required PowerShell modules..." -ForegroundColor Green
-        Set-PSRepository PSGallery -InstallationPolicy Trusted
-
-        # Note: Pester is automatically installed by the zyborg action
-        # Only need to install modules not handled by other actions
-        $modules = @('ModuleBuilder', 'Logging')
-
-        foreach ($module in $modules) {
-            Write-Host "Installing $module..." -ForegroundColor Green
-            Install-Module $module -Force -SkipPublisherCheck -AllowClobber
-        }
+    - name: ⚡ Install PowerShell Modules
+      uses: JustinGrote/ModuleFast-action
 
     - name: Run PSScriptAnalyzer
       if: inputs.analyzer-severity != 'none'
@@ -140,12 +119,7 @@ runs:
         report_title: ${{ inputs.test-report-title }}
         github_token: ${{ github.token }}
         tests_fail_step: true
-        # Enable code coverage if requested
-        coverage_paths: ${{ inputs.code-coverage == 'true' && inputs.code-coverage-path || '' }}
-        coverage_report_name: "Code Coverage"
-        coverage_report_title: "Code Coverage Report"
-        # Skip tests tagged as 'skip_ci' in CI environments
-        exclude_tags: skip_ci
+        skip_check_run: true # Our test results are too large
 
     # Upload test results as artifact for additional processing
     - name: Upload test results
