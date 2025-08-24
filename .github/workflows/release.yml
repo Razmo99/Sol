@@ -24,220 +24,120 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0  # Required for GitVersion
 
-      - name: Setup .NET 8 LTS for GitVersion
-        uses: actions/setup-dotnet@v4
+      - name: Setup and Test Module
+        id: build-test
+        uses: ./.github/actions/setup-and-test
         with:
-          dotnet-version: '8.0.x'
+          powershell-version: '7.x'
+          run-tests: 'true'
+          build-module: 'true'
+          analyzer-severity: 'Error'  # Only fail on errors for release
+          test-report-name: 'Release Tests'
+          test-report-title: 'Release Build Test Results'
 
-      - name: Install GitVersion 5.12.0
-        run: dotnet tool install --global GitVersion.Tool --version 5.12.0
-
-      - name: Verify PowerShell
-        run: pwsh --version
-
-      - name: Install required PowerShell modules
+      - name: Verify release quality
         shell: pwsh
         run: |
-          Set-PSRepository PSGallery -InstallationPolicy Trusted
-          $modules = @(
-            'Pester', 
-            'PSScriptAnalyzer', 
-            'ModuleBuilder', 
-            @{Name='Logging'; RequiredVersion='4.8.5'}
-          )
-          foreach ($module in $modules) {
-            if ($module -is [hashtable]) {
-              Write-Host "Installing $($module.Name) version $($module.RequiredVersion)..." -ForegroundColor Green
-              Install-Module $module.Name -RequiredVersion $module.RequiredVersion -Force -SkipPublisherCheck -Scope CurrentUser
-            } else {
-              Write-Host "Installing $module..." -ForegroundColor Green
-              Install-Module $module -Force -SkipPublisherCheck -Scope CurrentUser
-            }
+          # Additional release-specific quality checks
+          Write-Host "Release Quality Verification" -ForegroundColor Green
+          Write-Host "Version: ${{ steps.build-test.outputs.version }}" -ForegroundColor Cyan
+          Write-Host "SemVer: ${{ steps.build-test.outputs.semver }}" -ForegroundColor Cyan
+          
+          # Fail if tests didn't pass
+          if ('${{ steps.build-test.outputs.tests-failed }}' -ne '0') {
+            throw "Cannot release with failing tests"
           }
+          
+          Write-Host "All quality checks passed!" -ForegroundColor Green
 
-      - name: Get version information
-        id: version
+      - name: Create NuGet package
+        id: create-package
         shell: pwsh
         run: |
-          if ('${{ github.event.inputs.version }}') {
-            $version = '${{ github.event.inputs.version }}'
-            $semver = $version
-            Write-Host "Using manual version: $version" -ForegroundColor Green
+          Write-Host "Creating NuGet package..." -ForegroundColor Green
+          
+          $version = if ('${{ github.event.inputs.version }}') {
+            '${{ github.event.inputs.version }}'
           } else {
-            Write-Host "Running GitVersion..." -ForegroundColor Green
-            
-            # Get GitVersion output as JSON
-            $gitVersionRaw = dotnet-gitversion
-            Write-Host "GitVersion JSON output:" -ForegroundColor Yellow
-            Write-Host $gitVersionRaw
-            
-            try {
-              $gitVersionOutput = $gitVersionRaw | ConvertFrom-Json
-              $version = $gitVersionOutput.MajorMinorPatch
-              $semver = $gitVersionOutput.SemVer
-              Write-Host "Using GitVersion: $version" -ForegroundColor Green
-            } catch {
-              Write-Warning "GitVersion output could not be parsed as JSON. Using fallback version."
-              Write-Host "Error: $_" -ForegroundColor Red
-              $version = "0.1.0"
-              $semver = "0.1.0-release.${{ github.run_number }}"
-            }
+            '${{ steps.build-test.outputs.version }}'
           }
           
-          echo "version=$version" >> $env:GITHUB_OUTPUT
-          echo "semver=$semver" >> $env:GITHUB_OUTPUT
-          Write-Host "Final version: $version" -ForegroundColor Green
-          Write-Host "Final semver: $semver" -ForegroundColor Green
-
-      - name: Run quality checks
-        shell: pwsh
-        run: |
-          Write-Host "Running PSScriptAnalyzer..." -ForegroundColor Green
-          $analysisResults = Invoke-ScriptAnalyzer -Path . -Recurse -Settings PSGallery -Severity Error
-          
-          if ($analysisResults) {
-            $analysisResults | Format-Table -AutoSize
-            throw "PSScriptAnalyzer found errors that must be fixed before release"
-          }
-          
-          Write-Host "PSScriptAnalyzer passed" -ForegroundColor Green
-
-      - name: Build and test module
-        shell: pwsh
-        run: |
-          Write-Host "Building module..." -ForegroundColor Green
-          ./build.ps1 -UseGitVersion
-          
-          Write-Host "Running tests..." -ForegroundColor Green
-          $pesterConfig = New-PesterConfiguration
-          $pesterConfig.Run.Path = './Tests'
-          $pesterConfig.Run.PassThru = $true
-          
-          $testResult = Invoke-Pester -Configuration $pesterConfig
-          
-          if ($testResult.FailedCount -gt 0) {
-            throw "$($testResult.FailedCount) test(s) failed"
-          }
-          
-          Write-Host "All tests passed" -ForegroundColor Green
-
-      - name: Create module package
-        shell: pwsh
-        run: |
-          Write-Host "Creating module packages..." -ForegroundColor Green
-          
-          $outputPath = './output'
           $packagePath = './packages'
           New-Item -ItemType Directory -Path $packagePath -Force | Out-Null
           
-          # Create proper NuGet package
-          Write-Host "Creating NuGet package..." -ForegroundColor Green
+          # Create NuGet package
           Register-PSRepository -Name 'LocalBuild' -SourceLocation $packagePath -PublishLocation $packagePath -InstallationPolicy 'Trusted'
           Publish-Module -Path './output/sol' -Repository 'LocalBuild' -NuGetApiKey 'release-key' -Force -Verbose
           
-          # Create ZIP package for compatibility
-          $zipPath = Join-Path $packagePath "Sol-${{ steps.version.outputs.version }}.zip"
-          Compress-Archive -Path "$outputPath/*" -DestinationPath $zipPath -Force
-          Write-Host "Created ZIP package: $zipPath" -ForegroundColor Green
-          
-          # Create installation script
-          $installScript = @"
-          # Sol PowerShell Module Installation Script
-          # Version: ${{ steps.version.outputs.version }}
-          
-          param(
-              [string]`$InstallPath = `$null,
-              [switch]`$CurrentUser
-          )
-          
-          if (-not `$InstallPath) {
-              if (`$CurrentUser) {
-                  `$InstallPath = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'PowerShell/Modules'
-              } else {
-                  `$InstallPath = Join-Path `$env:ProgramFiles 'PowerShell/Modules'
-              }
-          }
-          
-          `$modulePath = Join-Path `$InstallPath 'Sol'
-          
-          Write-Host "Installing Sol module to: `$modulePath" -ForegroundColor Green
-          
-          if (Test-Path `$modulePath) {
-              Remove-Item `$modulePath -Recurse -Force
-          }
-          
-          New-Item -ItemType Directory -Path `$modulePath -Force | Out-Null
-          
-          # Extract and copy module files here
-          Write-Host "Sol module installed successfully!" -ForegroundColor Green
-          Write-Host "Import with: Import-Module Sol" -ForegroundColor Yellow
-          "@
-          
-          $installScript | Out-File -FilePath (Join-Path $packagePath "Install-Sol.ps1") -Encoding UTF8
-          
-          # List package contents
-          Get-ChildItem $packagePath | ForEach-Object {
-              Write-Host "Package created: $($_.Name) ($([math]::Round($_.Length/1KB, 2)) KB)" -ForegroundColor Green
-          }
-          
-          # Find and display the .nupkg file
+          # Find the .nupkg file
           $nupkgFile = Get-ChildItem $packagePath -Filter "*.nupkg" | Select-Object -First 1
           if ($nupkgFile) {
-            Write-Host "NuGet package: $($nupkgFile.Name)" -ForegroundColor Green
+            Write-Host "NuGet package created: $($nupkgFile.Name) ($([math]::Round($nupkgFile.Length/1MB, 2)) MB)" -ForegroundColor Green
+            echo "nupkg_name=$($nupkgFile.Name)" >> $env:GITHUB_OUTPUT
+            echo "nupkg_path=$($nupkgFile.FullName)" >> $env:GITHUB_OUTPUT
+          } else {
+            throw "Failed to create NuGet package"
           }
 
       - name: Generate release notes
         id: release_notes
-        shell: pwsh
-        run: |
-          Write-Host "Generating release notes..." -ForegroundColor Green
-          
-          # Get commits since last tag
-          $lastTag = git describe --tags --abbrev=0 HEAD~1 2>$null
-          if ($lastTag) {
-            $commits = git log --pretty=format:"- %s (%h)" "$lastTag..HEAD"
-            Write-Host "Found commits since $lastTag" -ForegroundColor Green
-          } else {
-            $commits = git log --pretty=format:"- %s (%h)" HEAD~10..HEAD
-            Write-Host "No previous tag found, using last 10 commits" -ForegroundColor Yellow
-          }
-          
-          $releaseNotes = @"
-          ## Sol PowerShell Module v${{ steps.version.outputs.version }}
-          
-          ### Changes in this release:
-          $commits
-          
-          ### Installation
-          
-          **Option 1: PowerShell Gallery Package (Recommended)**
-          1. Download the ``.nupkg`` file
-          2. Install with: ``Install-Module -Path ./Sol.X.X.X.nupkg -Scope CurrentUser``
-          
-          **Option 2: Direct Download**
-          1. Download the ``Sol-${{ steps.version.outputs.version }}.zip`` file
-          2. Extract to your PowerShell modules directory
-          3. Run ``Import-Module Sol``
-          
-          **Option 3: Using Installation Script**
-          1. Download ``Install-Sol.ps1``
-          2. Run ``./Install-Sol.ps1 -CurrentUser`` for user installation
-          3. Run ``./Install-Sol.ps1`` for system-wide installation (requires admin)
-          
-          ### Requirements
-          - PowerShell 5.1 or later
-          - Microsoft Graph PowerShell Module
-          - ActiveDirectory PowerShell Module
-          - Logging Module
-          
-          Generated on $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')
-          "@
-          
-          # Save to file for upload
-          $releaseNotes | Out-File -FilePath "RELEASE_NOTES.md" -Encoding UTF8
-          Write-Host "Release notes generated successfully" -ForegroundColor Green
+        uses: mikepenz/release-changelog-builder-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          configuration: |
+            {
+              "template": "## Sol PowerShell Module v${{ steps.build-test.outputs.version }}\n\n### What's Changed\n#{{CHANGELOG}}\n\n### Installation\n\n```powershell\n# Download the .nupkg file, then:\nInstall-Module -Path ./Sol.${{ steps.build-test.outputs.version }}.nupkg -Scope CurrentUser\n```\n\n### Requirements\n- PowerShell 5.1 or later\n- Microsoft Graph PowerShell Module\n- ActiveDirectory PowerShell Module\n- Logging Module\n\n### Test Results\n- Tests Passed: ${{ steps.build-test.outputs.tests-passed }}\n- Tests Failed: ${{ steps.build-test.outputs.tests-failed }}\n\n**Full Changelog**: #{{RELEASE_DIFF}}\n\n### Contributors\n#{{CONTRIBUTORS}}",
+              "categories": [
+                {
+                  "title": "## 🚀 Features",
+                  "labels": ["feature", "enhancement"]
+                },
+                {
+                  "title": "## 🐛 Bug Fixes",
+                  "labels": ["bug", "fix"]
+                },
+                {
+                  "title": "## 📝 Documentation",
+                  "labels": ["documentation", "docs"]
+                },
+                {
+                  "title": "## 🧰 Maintenance",
+                  "labels": ["maintenance", "chore"]
+                },
+                {
+                  "title": "## ⬆️ Dependencies",
+                  "labels": ["dependencies"]
+                }
+              ],
+              "sort": {
+                "order": "DESC",
+                "on_property": "mergedAt"
+              },
+              "label_extractor": [
+                {
+                  "pattern": "(feat|feature)",
+                  "target": "feature"
+                },
+                {
+                  "pattern": "(fix|bug)",
+                  "target": "bug"
+                },
+                {
+                  "pattern": "(docs|documentation)",
+                  "target": "documentation"
+                }
+              ],
+              "duplicate_filter": true,
+              "transformers": [
+                {
+                  "pattern": "\\[skip ci\\]",
+                  "flags": "ig",
+                  "target": ""
+                }
+              ]
+            }
 
       - name: Create GitHub Release
         uses: actions/github-script@v7
@@ -245,99 +145,31 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const fs = require('fs');
-            const releaseNotes = fs.readFileSync('./RELEASE_NOTES.md', 'utf8');
+            const version = '${{ github.event.inputs.version }}' || '${{ steps.build-test.outputs.version }}';
             
             const release = await github.rest.repos.createRelease({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              tag_name: 'v${{ steps.version.outputs.version }}',
-              name: 'Sol v${{ steps.version.outputs.version }}',
-              body: releaseNotes,
+              tag_name: `v${version}`,
+              name: `Sol v${version}`,
+              body: `${{ steps.release_notes.outputs.changelog }}`,
               draft: false,
-              prerelease: ${{ contains(steps.version.outputs.semver, '-') }}
+              prerelease: '${{ steps.build-test.outputs.semver }}'.includes('-')
             });
             
             core.setOutput('release_id', release.data.id);
             core.setOutput('upload_url', release.data.upload_url);
             return release.data.html_url;
 
-      - name: Upload release assets
-        uses: actions/upload-artifact@v4
+      - name: Upload NuGet package to release
+        uses: actions/upload-release-asset@v1
         with:
-          name: release-assets-${{ steps.version.outputs.version }}
-          path: |
-            ./packages/Sol-${{ steps.version.outputs.version }}.zip
-            ./packages/*.nupkg
-            ./packages/Install-Sol.ps1
-            ./RELEASE_NOTES.md
-          retention-days: 90
-
-      - name: Attach assets to release
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const fs = require('fs');
-            const path = require('path');
-            
-            // Find the .nupkg file dynamically
-            let nupkgFile = null;
-            try {
-              const packageFiles = fs.readdirSync('./packages');
-              const nupkgFiles = packageFiles.filter(f => f.endsWith('.nupkg'));
-              if (nupkgFiles.length > 0) {
-                nupkgFile = path.join('./packages', nupkgFiles[0]);
-              }
-            } catch (error) {
-              console.log('No packages directory or .nupkg files found');
-            }
-            
-            const assets = [
-              {
-                name: 'Sol-${{ steps.version.outputs.version }}.zip',
-                path: './packages/Sol-${{ steps.version.outputs.version }}.zip',
-                contentType: 'application/zip'
-              },
-              {
-                name: 'Install-Sol.ps1',
-                path: './packages/Install-Sol.ps1',
-                contentType: 'text/plain'
-              },
-              {
-                name: 'RELEASE_NOTES.md',
-                path: './RELEASE_NOTES.md',
-                contentType: 'text/markdown'
-              }
-            ];
-            
-            // Add .nupkg file if it exists
-            if (nupkgFile) {
-              const nupkgName = path.basename(nupkgFile);
-              assets.push({
-                name: nupkgName,
-                path: nupkgFile,
-                contentType: 'application/zip'
-              });
-              console.log(`Adding NuGet package: ${nupkgName}`);
-            }
-            
-            for (const asset of assets) {
-              const data = fs.readFileSync(asset.path);
-              await github.rest.repos.uploadReleaseAsset({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                release_id: ${{ steps.create_release.outputs.release_id }},
-                name: asset.name,
-                data: data,
-                headers: {
-                  'content-type': asset.contentType,
-                  'content-length': data.length
-                }
-              });
-            }
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ steps.create-package.outputs.nupkg_path }}
+          asset_name: ${{ steps.create-package.outputs.nupkg_name }}
+          asset_content_type: application/zip
 
       - name: Generate build attestation
         uses: actions/attest-build-provenance@v1
         with:
-          subject-path: './packages/Sol-${{ steps.version.outputs.version }}.zip'
+          subject-path: ${{ steps.create-package.outputs.nupkg_path }}
