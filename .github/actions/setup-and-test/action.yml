@@ -1,75 +1,75 @@
-name: 'Setup and Test PowerShell Module'
-description: 'Common setup and testing steps for PowerShell module CI/CD with GitTools, RequiredModules pattern, and enhanced Pester reporting'
+name: "Setup and Test PowerShell Module"
+description: "Common setup and testing steps for PowerShell module CI/CD with GitTools, RequiredModules pattern, and enhanced Pester reporting"
 
 inputs:
   powershell-version:
-    description: 'PowerShell version to use'
+    description: "PowerShell version to use"
     required: false
-    default: '7.x'
+    default: "7.x"
   run-tests:
-    description: 'Whether to run Pester tests'
+    description: "Whether to run Pester tests"
     required: false
-    default: 'true'
+    default: "true"
   build-module:
-    description: 'Whether to build the module'
+    description: "Whether to build the module"
     required: false
-    default: 'true'
+    default: "true"
   analyzer-severity:
-    description: 'PSScriptAnalyzer severity level'
+    description: "PSScriptAnalyzer severity level"
     required: false
-    default: 'Error,Warning'
+    default: "Error,Warning"
   test-path:
-    description: 'Path to Pester tests'
+    description: "Path to Pester tests"
     required: false
-    default: 'Tests'
+    default: "Tests"
   code-coverage:
-    description: 'Enable code coverage'
+    description: "Enable code coverage"
     required: false
-    default: 'true'
+    default: "true"
   code-coverage-path:
-    description: 'Path to source files for code coverage'
+    description: "Path to source files for code coverage"
     required: false
-    default: 'Source'
+    default: "Source"
   test-report-name:
-    description: 'Name for the test report'
+    description: "Name for the test report"
     required: false
-    default: 'Test Results'
+    default: "Test Results"
   test-report-title:
-    description: 'Title for the test report'
+    description: "Title for the test report"
     required: false
-    default: 'PowerShell Module Tests'
+    default: "PowerShell Module Tests"
 
 outputs:
   version:
-    description: 'Version from GitVersion'
+    description: "Version from GitVersion"
     value: ${{ steps.gitversion.outputs.majorMinorPatch }}
   semver:
-    description: 'Semantic version from GitVersion'
+    description: "Semantic version from GitVersion"
     value: ${{ steps.gitversion.outputs.semVer }}
   nugetVersion:
-    description: 'NuGet version'
+    description: "NuGet version"
     value: ${{ steps.gitversion.outputs.nuGetVersionV2 }}
   informationalVersion:
-    description: 'Full informational version'
+    description: "Full informational version"
     value: ${{ steps.gitversion.outputs.informationalVersion }}
   test-results-path:
-    description: 'Path to test results file'
+    description: "Path to test results file"
     value: ${{ steps.test-report.outputs.test_results_path }}
   tests-passed:
-    description: 'Number of tests passed'
+    description: "Number of tests passed"
     value: ${{ steps.test-report.outputs.passed_count }}
   tests-failed:
-    description: 'Number of tests failed'
+    description: "Number of tests failed"
     value: ${{ steps.test-report.outputs.failed_count }}
 
 runs:
-  using: 'composite'
+  using: "composite"
   steps:
     - name: Install GitVersion
       uses: gittools/actions/gitversion/setup@v0.10.2
       with:
-        versionSpec: '5.x'
-        
+        versionSpec: "5.x"
+
     - name: Determine Version
       id: gitversion
       uses: gittools/actions/gitversion/execute@v0.10.2
@@ -83,11 +83,11 @@ runs:
       run: |
         Write-Host "Installing required PowerShell modules..." -ForegroundColor Green
         Set-PSRepository PSGallery -InstallationPolicy Trusted
-        
+
         # Note: Pester is automatically installed by the zyborg action
         # Only need to install modules not handled by other actions
         $modules = @('ModuleBuilder', 'Logging')
-        
+
         foreach ($module in $modules) {
             Write-Host "Installing $module..." -ForegroundColor Green
             Install-Module $module -Force -SkipPublisherCheck -AllowClobber
@@ -101,7 +101,7 @@ runs:
         recurse: true
         output: pssa-results.sarif
         settings: ${{ hashFiles('PSScriptAnalyzerSettings.psd1') != '' && 'PSScriptAnalyzerSettings.psd1' || '' }}
-        
+
     # Upload SARIF results to GitHub for code scanning
     - name: Upload SARIF results
       if: always() && inputs.analyzer-severity != 'none'
@@ -122,13 +122,12 @@ runs:
         GITVERSION_ASSEMBLYSEMFILEVER: ${{ steps.gitversion.outputs.assemblySemFileVer }}
       run: |
         Write-Host "Building module version: $env:GITVERSION_SEMVER" -ForegroundColor Green
-        
-            $buildParams = @{
-                UseGitVersion:$true
-                UnversionedOutputDirectory:$false
-            }
-            
-            ./build.ps1 @buildParams
+
+        $buildParams = @{
+            UseGitVersion = $true
+            UnversionedOutputDirectory = $false
+        }
+        ./build.ps1 @buildParams
 
     # Use zyborg's pester-tests-report for rich test reporting
     - name: Run Pester tests with reporting
@@ -143,11 +142,11 @@ runs:
         tests_fail_step: true
         # Enable code coverage if requested
         coverage_paths: ${{ inputs.code-coverage == 'true' && inputs.code-coverage-path || '' }}
-        coverage_report_name: 'Code Coverage'
-        coverage_report_title: 'Code Coverage Report'
+        coverage_report_name: "Code Coverage"
+        coverage_report_title: "Code Coverage Report"
         # Skip tests tagged as 'skip_ci' in CI environments
         exclude_tags: skip_ci
-        
+
     # Upload test results as artifact for additional processing
     - name: Upload test results
       uses: actions/upload-artifact@v4
@@ -158,7 +157,7 @@ runs:
           ${{ steps.test-report.outputs.test_results_path }}
           ${{ steps.test-report.outputs.coverage_results_path }}
         retention-days: 30
-        
+
     # Output test summary
     - name: Test Summary
       if: always() && inputs.run-tests == 'true'
