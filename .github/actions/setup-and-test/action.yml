@@ -69,8 +69,8 @@ runs:
         useConfigFile: true
         configFilePath: ./GitVersion.yml
 
-    - name: ⚡ Install PowerShell Modules
-      uses: JustinGrote/ModuleFast-action
+    - name: ⚡ Install Required Modules
+      uses: JustinGrote/ModuleFast-action@v0.0.1
 
     - name: Run PSScriptAnalyzer
       if: inputs.analyzer-severity != 'none'
