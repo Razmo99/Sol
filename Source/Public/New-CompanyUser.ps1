@@ -50,7 +50,7 @@
         }
         #Get branch information XML document
         try {
-            [xml]$XmlDocument = Get-Content -Path ($CurrentPath + '\BRANCHES.XML') -ErrorAction Stop
+            [xml]$XmlDocument = Get-Content -Path ($CurrentPath + './BRANCHES.XML') -ErrorAction Stop
             $ADA = $XmlDocument.companies.$Company
         }
         catch [System.Management.Automation.ItemNotFoundException] {
@@ -168,16 +168,18 @@
             if (!$Branch) {
                 Write-Log -Level Debug -Message 'No User Branch Entered'
                 if ($ADA) {
-                    $Branch = Show-CompanyBranches -Branches $ADA
+                    $Branch = Show-CompanyBranch -Branches $ADA
                 }
             }
             if (!$Title) {
+                Wait-Logging
                 $Title = Read-Host 'User title'
             }
             if (!$Manager) {
                 do {
                     $Finished = $false
                     try {
+                        Wait-Logging
                         $Manager = Read-Host("Manager (first.lastname)") -ErrorAction Stop
                         $Finished = $true
                     }
@@ -197,11 +199,12 @@
                 do {
                     $Finished = $false
                     try {
+                        Wait-Logging
                         $OfficePhone = Read-Host("Office Phone Number") -ErrorAction Stop
                         $Finished = $true
                     }
                     catch [System.Management.Automation.ValidationMetadataException] {
-                        Write-Log -Level Warning -Message 'Invalid Input | Must be 4 numbers or blank'
+                        Write-Log -Level Warning -Message 'Invalid Input | Must be 10 numbers or blank'
                         $Finished = $false
                     }
                     if (!$OfficePhone -match '^[0-9]{10,10}$|^(?![\s\S])' -and $Finished -eq $true) {
@@ -213,6 +216,7 @@
                 do {
                     $Finished = $false
                     try {
+                        Wait-Logging
                         $MobilePhone = Read-Host("Mobile Phone Number") -ErrorAction Stop
                         $Finished = $true
                     }
@@ -229,6 +233,7 @@
                 do {
                     $Finished = $false
                     try {
+                        Wait-Logging
                         $M365License = Read-Host("Office 365 License type") -ErrorAction Stop
                         $Finished = $true
                     }
@@ -272,7 +277,7 @@
             # Only Execute the Prompts if their is aleast one of the below
             if ($InteractivePrompts -or $AutoMemberOf) {
                 # Store the results in the a variable
-                [Array]$ResultsIP = @(Test-InteractivePrompts @SplatTestInteractivePrompts | Where-Object { $_ })
+                [Array]$ResultsIP = @(Test-InteractivePrompt @SplatTestInteractivePrompts | Where-Object { $_ })
                 If ($ResultsIP) {
                     $MemberOf.AddRange($ResultsIP)
                 }
