@@ -14,6 +14,7 @@ jobs:
     name: Build and Test PowerShell Module (PS ${{ matrix.powershell-version }})
     runs-on: windows-latest
     strategy:
+      max-parallel: 1
       matrix:
         powershell-version: ['5.1', '7.x']
     
