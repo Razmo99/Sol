@@ -78,15 +78,7 @@ runs:
       with:
         path: .
         recurse: true
-        output: pssa-results.sarif
         settings: ${{ hashFiles('PSScriptAnalyzerSettings.psd1') != '' && 'PSScriptAnalyzerSettings.psd1' || '' }}
-
-    # Upload SARIF results to GitHub for code scanning
-    - name: Upload SARIF results
-      if: always() && inputs.analyzer-severity != 'none' && hashFiles('pssa-results.sarif') != ''
-      uses: github/codeql-action/upload-sarif@v3
-      with:
-        sarif_file: pssa-results.sarif
 
     # Build module before testing
     - name: Build module
