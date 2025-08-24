@@ -100,7 +100,7 @@ runs:
         GITVERSION_ASSEMBLYSEMVER: ${{ steps.gitversion.outputs.assemblySemVer }}
         GITVERSION_ASSEMBLYSEMFILEVER: ${{ steps.gitversion.outputs.assemblySemFileVer }}
       run: |
-        Write-Host "Building module version: $env:GITVERSION_SEMVER" -ForegroundColor Green
+        Write-Information "Building module version: $env:GITVERSION_SEMVER"
 
         $buildParams = @{
             UseGitVersion = $true
@@ -126,7 +126,7 @@ runs:
       uses: actions/upload-artifact@v4
       if: always() && inputs.run-tests == 'true'
       with:
-        name: test-results
+        name: test-results-${{ inputs.powershell-version }}
         path: |
           ${{ steps.test-report.outputs.test_results_path }}
           ${{ steps.test-report.outputs.coverage_results_path }}
