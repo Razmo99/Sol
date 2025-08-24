@@ -38,14 +38,6 @@ inputs:
     description: 'Title for the test report'
     required: false
     default: 'PowerShell Module Tests'
-  required-modules-path:
-    description: 'Path to RequiredModules.psd1 file'
-    required: false
-    default: './RequiredModules.psd1'
-  cache-modules:
-    description: 'Whether to cache PowerShell modules'
-    required: false
-    default: 'true'
 
 outputs:
   version:
@@ -84,19 +76,6 @@ runs:
       with:
         useConfigFile: true
         configFilePath: ./GitVersion.yml
-        
-    # Optional: Only display in debug mode
-    - name: Display version (Debug)
-      shell: bash
-      if: runner.debug == '1'
-      run: |
-        echo "::group::GitVersion Output"
-        echo "MajorMinorPatch: ${{ steps.gitversion.outputs.majorMinorPatch }}"
-        echo "SemVer: ${{ steps.gitversion.outputs.semVer }}"
-        echo "NuGetVersionV2: ${{ steps.gitversion.outputs.nuGetVersionV2 }}"
-        echo "InformationalVersion: ${{ steps.gitversion.outputs.informationalVersion }}"
-        echo "BranchName: ${{ steps.gitversion.outputs.branchName }}"
-        echo "::endgroup::"
 
     # Simple PowerShell module installation
     - name: Install Required PowerShell Modules
@@ -114,7 +93,6 @@ runs:
             Install-Module $module -Force -SkipPublisherCheck -AllowClobber
         }
 
-    # Run PSScriptAnalyzer using official Microsoft action
     - name: Run PSScriptAnalyzer
       if: inputs.analyzer-severity != 'none'
       uses: microsoft/psscriptanalyzer-action@v1.0
@@ -155,3 +133,39 @@ runs:
     # Use zyborg's pester-tests-report for rich test reporting
     - name: Run Pester tests with reporting
       id: test-report
+      if: inputs.run-tests == 'true'
+      uses: zyborg/pester-tests-report@v1
+      with:
+        include_paths: ${{ inputs.test-path }}
+        report_name: ${{ inputs.test-report-name }}
+        report_title: ${{ inputs.test-report-title }}
+        github_token: ${{ github.token }}
+        tests_fail_step: true
+        # Enable code coverage if requested
+        coverage_paths: ${{ inputs.code-coverage == 'true' && inputs.code-coverage-path || '' }}
+        coverage_report_name: 'Code Coverage'
+        coverage_report_title: 'Code Coverage Report'
+        # Skip tests tagged as 'skip_ci' in CI environments
+        exclude_tags: skip_ci
+        
+    # Upload test results as artifact for additional processing
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always() && inputs.run-tests == 'true'
+      with:
+        name: test-results
+        path: |
+          ${{ steps.test-report.outputs.test_results_path }}
+          ${{ steps.test-report.outputs.coverage_results_path }}
+        retention-days: 30
+        
+    # Output test summary
+    - name: Test Summary
+      if: always() && inputs.run-tests == 'true'
+      shell: pwsh
+      run: |
+        Write-Host "## Test Results Summary" -ForegroundColor Cyan
+        Write-Host "Total Tests: ${{ steps.test-report.outputs.total_count }}"
+        Write-Host "Passed: ${{ steps.test-report.outputs.passed_count }}" -ForegroundColor Green
+        Write-Host "Failed: ${{ steps.test-report.outputs.failed_count }}" -ForegroundColor $(if('${{ steps.test-report.outputs.failed_count }}' -eq '0') {'Green'} else {'Red'})
+        Write-Host "Result: ${{ steps.test-report.outputs.result_value }}" -ForegroundColor $(if('${{ steps.test-report.outputs.result_value }}' -eq 'Passed') {'Green'} else {'Red'})
