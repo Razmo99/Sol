@@ -120,14 +120,3 @@ runs:
         github_token: ${{ github.token }}
         tests_fail_step: true
         skip_check_run: true # Our test results are too large
-    
-    - name: Summarize test results
-      shell: pwsh
-      run: | # PowerShell
-        Write-ActionInfo 'Total Tests Executed...:  ${{ steps.pester.outputs.total_count }}'
-        Write-ActionInfo 'Total Tests Passed.....:  ${{ steps.pester.outputs.passed_count }}'
-        if (${{ steps.pester.outputs.failed_count }} -gt 0) {
-          Set-ActionFailed 'Total Tests Failed.....:  ${{ steps.pester.outputs.failed_count }}'
-        } else {
-          Write-ActionInfo 'Total Tests Failed.....:  ${{ steps.pester.outputs.failed_count }}'
-        }
