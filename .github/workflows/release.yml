@@ -25,6 +25,10 @@ jobs:
   release:
     name: Create Release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
     
     steps:
       - name: Checkout code
