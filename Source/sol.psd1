@@ -30,7 +30,7 @@
     Copyright         = '(c) 2025 razmo99. All rights reserved.'
 
     # Description of the functionality provided by this module
-    # Description = 'Series of handy commands to be referenced'
+    Description = 'Series of handy commands to be referenced'
 
     # Minimum version of the Windows PowerShell engine required by this module
     # PowerShellVersion = '5'
@@ -57,6 +57,7 @@
             ModuleVersion = '4.8.5'
         }
     )
+    
 
     # Assemblies that must be loaded prior to importing this module
     # RequiredAssemblies = @()
@@ -116,6 +117,8 @@
 
             # Prerelease string for this module (supports semantic versioning)
             Prerelease = ''
+            
+            ExternalModuleDependencies = @('Logging')
 
         } # End of PSData hashtable
 

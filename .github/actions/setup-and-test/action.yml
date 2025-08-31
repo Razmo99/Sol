@@ -105,6 +105,7 @@ runs:
         tests_fail_step: true
         skip_check_run: true # Our test results are too large
     - name: Summarize test results
+      id: test-report
       shell: pwsh
       run: | # PowerShell
         Write-ActionInfo 'Total Tests Executed...:  ${{ steps.pester.outputs.total_count }}'
@@ -114,3 +115,9 @@ runs:
         } else {
           Write-ActionInfo 'Total Tests Failed.....:  ${{ steps.pester.outputs.failed_count }}'
         }
+        
+        # Set outputs for the composite action
+        echo "passed_count=${{ steps.pester.outputs.passed_count }}" >> $env:GITHUB_OUTPUT
+        echo "failed_count=${{ steps.pester.outputs.failed_count }}" >> $env:GITHUB_OUTPUT
+        echo "total_count=${{ steps.pester.outputs.total_count }}" >> $env:GITHUB_OUTPUT
+        echo "test_results_path=${{ steps.pester.outputs.test_results_path }}" >> $env:GITHUB_OUTPUT
