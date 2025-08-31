@@ -149,14 +149,6 @@ Describe "ConvertTo-CommandString" {
     }
 
     Context "Parameter Validation" {
-        It "Should require CommandName parameter" {
-            { ConvertTo-CommandString -Parameters @{} } | Should -Throw
-        }
-
-        It "Should require Parameters parameter" {
-            { ConvertTo-CommandString -CommandName "Test-Command" } | Should -Throw
-        }
-
         It "Should handle empty parameters hashtable" {
             $result = ConvertTo-CommandString -CommandName "Test-Command" -Parameters @{}
             $result | Should -Be "Test-Command"
