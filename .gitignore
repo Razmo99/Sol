@@ -1,13 +1,8 @@
-# Cache objects
 packer_cache/
 
 # For built boxes
 *.box
 output/
-.bmad-core/
-docs/
-web-bundles/
-architecture_options/
 
 # Web bundles and build artifacts
 *.bundle.js
