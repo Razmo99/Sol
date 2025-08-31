@@ -10,6 +10,12 @@ on:
         description: 'Version to release (leave empty to use GitVersion)'
         required: false
         type: string
+        default: ''
+      prerelease:
+        description: 'Create as prerelease'
+        required: false
+        type: boolean
+        default: false
 
 env:
   DOTNET_NOLOGO: true
