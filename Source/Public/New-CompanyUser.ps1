@@ -1,4 +1,4 @@
-﻿function New-CompanyUser {
+function New-CompanyUser {
     [CmdletBinding(SupportsShouldProcess = $true)]
     param (
         [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)][ValidateLength(1, 20)][string]$Firstname,
@@ -438,21 +438,29 @@
         #region DataConfirmation
         #Chance to confirm some account details
         if ($Interactive -and !$PSCmdlet.MyInvocation.ExpectingInput) {
-            Write-Log -Level Debug -Message '------------------------------'
-            Write-Log -Level Debug -Message 'Active Directory Details'
-            Write-Log -Level Debug -Message '------------------------------'
-            if ($M365DeploymentType -eq 'Hybrid') { $SplatADAttributes | Format-table -Verbose }else { $SplatADNewUser | Format-table -Verbose }
-            Write-Log -Level Debug -Message '------------------------------'
-            Write-Log -Level Debug -Message 'AD Group Details'
-            Write-Log -Level Debug -Message '------------------------------'
-            $MemberOf | Format-List -Verbose
-            Write-Log -Level Debug -Message '------------------------------'
-            if ($M365DeploymentType -eq 'Hybrid') {
-                Write-Log -Level Debug -Message 'Exchange Details'
-                Write-Log -Level Debug -Message '------------------------------'
-                $SplatExchange | Format-table -Verbose
-                Write-Log -Level Debug -Message '------------------------------'
+            $adDetails = if ($M365DeploymentType -eq 'Hybrid') { 
+                ($SplatADAttributes | Format-Table | Out-String).Trim() 
+            } else { 
+                ($SplatADNewUser | Format-Table | Out-String).Trim() 
             }
+            $groupDetails = ($MemberOf | Format-List | Out-String).Trim()
+            $exchangeDetails = if ($M365DeploymentType -eq 'Hybrid') {
+                ($SplatExchange | Format-Table | Out-String).Trim()
+            } else { "" }
+            $exchangeMessage=$(if ($M365DeploymentType -eq 'Hybrid') { "`nExchange Details`n------------------------------`n$exchangeDetails`n------------------------------" })
+            $detailsMessage = @"
+`n------------------------------
+Active Directory Details
+------------------------------
+$adDetails
+------------------------------
+AD Group Details
+------------------------------
+$groupDetails
+------------------------------$exchangeMessage
+"@
+            Write-Log -Level Debug -Message $detailsMessage
+            
             if (!(Test-UserContinue -Message 'Above are the details for the user to be created, if the details are correct proceed otherwise cancel')) {
                 Write-Log -Level Debug -Message 'User Cancelled Terminating'
                 Exit
