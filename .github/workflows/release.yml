@@ -71,7 +71,7 @@ jobs:
           $version = if ('${{ github.event.inputs.version }}') {
             '${{ github.event.inputs.version }}'
           } else {
-            '${{ steps.build-test.outputs.version }}'
+            '${{ steps.build-test.outputs.semver }}'
           }
           
           $packagePath = './packages'
@@ -102,7 +102,8 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           configuration: |
             {
-              "template": "## Sol PowerShell Module v${{ steps.build-test.outputs.version }}\n\n### What's Changed\n#{{CHANGELOG}}\n\n### Installation\n\n```powershell\n# Download the .nupkg file, then:\nInstall-Module -Path ./Sol.${{ steps.build-test.outputs.version }}.nupkg -Scope CurrentUser\n```\n\n### Requirements\n- PowerShell 5.1 or later\n- Microsoft Graph PowerShell Module\n- ActiveDirectory PowerShell Module\n- Logging Module\n\n### Test Results\n- Tests Passed: ${{ steps.build-test.outputs.tests-passed }}\n- Tests Failed: ${{ steps.build-test.outputs.tests-failed }}\n\n**Full Changelog**: #{{RELEASE_DIFF}}\n\n### Contributors\n#{{CONTRIBUTORS}}",
+              "template": "## Sol PowerShell Module v${{ steps.build-test.outputs.semver }}\n\n### What's Changed\n#{{CHANGELOG}}\n\n### Installation\n\n```powershell\n# Download the .nupkg file, then:\nInstall-Module -Path ./Sol.${{ steps.build-test.outputs.semver }}.nupkg -Scope CurrentUser\n```\n\n### Requirements\n- PowerShell 5.1 or later\n- Microsoft Graph PowerShell Module\n- ActiveDirectory PowerShell Module\n- Logging Module\n\n### Test Results\n- Tests Passed: ${{ steps.build-test.outputs.tests-passed }}\n- Tests Failed: ${{ steps.build-test.outputs.tests-failed }}\n\n**Full Changelog**: #{{RELEASE_DIFF}}\n\n### Contributors\n#{{CONTRIBUTORS}}",
+              "commitMode": true,
               "categories": [
                 {
                   "title": "## 🚀 Features",
@@ -156,8 +157,8 @@ jobs:
       - name: Create GitHub Release and Upload Assets
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.build-test.outputs.version }}
-          name: Sol v${{ steps.build-test.outputs.version }}
+          tag_name: v${{ steps.build-test.outputs.semver }}
+          name: Sol v${{ steps.build-test.outputs.semver }}
           body: ${{ steps.release_notes.outputs.changelog }}
           files: ${{ steps.create-package.outputs.nupkg_path }}
           prerelease: ${{ contains(steps.build-test.outputs.semver, '-') }}
