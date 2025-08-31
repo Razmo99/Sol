@@ -67,6 +67,7 @@ function Test-MgConnected {
                 catch {
                     Write-Log -Level Error -Message $_.Exception.Message -ExceptionInfo $_
                     if (!$NoRetry) {
+                        Wait-Logging
                         $response = read-host "Press enter to try again or any other key (and then enter) to abort"
                         $aborted = ! [bool]$response
                         if (!$aborted) {
