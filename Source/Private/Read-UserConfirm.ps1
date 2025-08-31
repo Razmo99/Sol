@@ -16,15 +16,13 @@ function Read-UserConfirm {
     [CmdletBinding()]
     [OutputType([Boolean])]
     param (
-        [Parameter(Mandatory = $false)][String]$Message
+        [Parameter(Mandatory = $false)][String]$Message = 'Press enter to confirm; or any other key (and then enter) to exit'
     )
-    if ($Message) {
-        $response = read-host $Message
-    }
-    else {
-        $response = read-host 'Press enter to confirm; or any other key (and then enter) to exit'
-    }
+    Wait-Logging
+    $response = read-host $Message
+    
     $aborted = ! [bool]$response
+    
     if (!$aborted) {
         return $false
     }
