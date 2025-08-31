@@ -6,7 +6,7 @@
 
 # Get version from GitVersion if available and requested
 $moduleVersion = $null
-$semVer = $null
+$nugetVersion = $null
 if ($UseGitVersion) {
     try {
         # Check if GitVersion tool is available
@@ -15,9 +15,9 @@ if ($UseGitVersion) {
             Write-Information "Getting version from GitVersion..."
             $gitVersionOutput = & dotnet-gitversion | ConvertFrom-Json
             $moduleVersion = [Version]$gitVersionOutput.MajorMinorPatch
-            $semVer = $gitVersionOutput.SemVer
+            $nugetVersion = $gitVersionOutput.NuGetVersionV2
             Write-Information "GitVersion calculated version: $moduleVersion"
-            Write-Information "GitVersion full semantic version: $semVer"
+            Write-Information "GitVersion NuGet-compatible version: $nugetVersion"
         } else {
             Write-Warning "GitVersion tool not found. Install with: dotnet tool install --global GitVersion.Tool"
         }
@@ -35,10 +35,10 @@ $buildParams = @{
 }
 
 # Add version information if we got one from GitVersion
-if ($moduleVersion -and $semVer) {
-    # Use SemVer parameter for full semantic versioning support (includes pre-release tags)
-    $buildParams['SemVer'] = $semVer
-    Write-Information "Using semantic version for build: $semVer"
+if ($moduleVersion -and $nugetVersion) {
+    # Use NuGet-compatible version for module publishing compatibility
+    $buildParams['SemVer'] = $nugetVersion
+    Write-Information "Using NuGet-compatible version for build: $nugetVersion"
 } elseif ($moduleVersion) {
     # Fallback to Version parameter if only basic version is available
     $buildParams['Version'] = $moduleVersion

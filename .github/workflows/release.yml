@@ -67,9 +67,13 @@ jobs:
           $packagePath = './packages'
           New-Item -ItemType Directory -Path $packagePath -Force | Out-Null
           
-          # Create NuGet package
-          Register-PSRepository -Name 'LocalBuild' -SourceLocation $packagePath -PublishLocation $packagePath -InstallationPolicy 'Trusted'
-          Publish-Module -Path './output/sol' -Repository 'LocalBuild' -NuGetApiKey 'release-key' -Force -Verbose
+          Register-PSRepository -Name 'LocalBuild' `
+          -SourceLocation $packagePath `
+          -InstallationPolicy 'Trusted'
+          
+          Publish-Module -Path './output/sol' `
+          -Repository 'LocalBuild' `
+          -NuGetApiKey 'release-key'
           
           # Find the .nupkg file
           $nupkgFile = Get-ChildItem $packagePath -Filter "*.nupkg" | Select-Object -First 1
