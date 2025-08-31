@@ -39,4 +39,4 @@ $SplatContosoCompanyUser = @{
     WhatIf             = $true
 }
 
-New-CompanyUser @SplatContosoCompanyUser
+New-CompanyUser @SplatContosoCompanyUser -Firstname John -Lastname Deer

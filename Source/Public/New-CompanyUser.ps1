@@ -50,7 +50,7 @@
         }
         #Get branch information XML document
         try {
-            [xml]$XmlDocument = Get-Content -Path ($CurrentPath + './BRANCHES.XML') -ErrorAction Stop
+            [xml]$XmlDocument = Get-Content -Path (Join-Path -Path $CurrentPath -ChildPath '/BRANCHES.XML') -ErrorAction Stop
             $ADA = $XmlDocument.companies.$Company
         }
         catch [System.Management.Automation.ItemNotFoundException] {

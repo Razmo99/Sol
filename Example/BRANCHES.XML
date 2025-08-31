@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <companies>
     <contoso>
-        <HeadOffice-9999>
-            <name>Head Office - Sydney</name>
+        <Sydney>
+            <name>Sydney</name>
             <street>99 Contoso Place</street>
             <po_box>P.O Box 9999</po_box>
             <state>NSW</state>
@@ -17,10 +17,10 @@
             <ou>contoso.local/HeadOffice-9999</ou>
             <drive_group>HO-FileAccess</drive_group>
             <distro>HO-Staff</distro>
-        </HeadOffice-9999>
+        </Sydney>
 
-        <OutBack-9998>
-            <name>Outback Branch - Perth</name>
+        <Perth>
+            <name>Perth</name>
             <street>123 Mining Road</street>
             <po_box>P.O Box 9998</po_box>
             <state>WA</state>
@@ -35,6 +35,6 @@
             <ou>contoso.local/OutBack-9998</ou>
             <drive_group>OB-FileAccess</drive_group>
             <distro>OB-Staff</distro>
-        </OutBack-9998>
+        </Perth>
     </contoso>
 </companies>

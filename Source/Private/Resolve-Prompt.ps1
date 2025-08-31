@@ -1,4 +1,6 @@
-﻿function Resolve-Prompt {
+using namespace System.Collections
+
+function Resolve-Prompt {
     <#
     .SYNOPSIS
     Resolves the provided prompts using Topological sorting till completion
@@ -19,10 +21,10 @@
         [parameter(Mandatory = $true)][HashTable]$Prompts,
         [parameter(Mandatory = $true)][HashTable]$OriginalPrompts
     )
-    # Clone the prompts as to not modify the source
-    $currentPrompts = [HashTable] (Get-ClonedObject $Prompts)
-    # This is a queue so that as answers are received the currentPrompts can be updated and then reproccessed
-    $PromptsQueue = New-Object System.Collections.Queue
+    # Create working copy since we modify prompts during processing
+    $currentPrompts = $Prompts.Clone()
+    # Queue for iterative prompt processing
+    $PromptsQueue = [Queue]::new()
     # Kick it all off by Enqueueing the current prompts
     $PromptsQueue.Enqueue((Get-TopologicalSort $currentPrompts))
     # This Array contains the names of prompts that returned true

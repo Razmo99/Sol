@@ -30,10 +30,10 @@ function Initialize-Logging {
 
     # Define common colors for both targets
     $LogColors = @{
-        Debug       = 'Cyan'
-        Warning     = 'Yellow'
-        Error       = 'Red'
-        Information = 'Green'
+        'DEBUG'   = 'Cyan'
+        'INFO'    = 'Green'
+        'WARNING' = 'Yellow'
+        'ERROR'   = 'Red'
     }
 
     Set-LoggingDefaultLevel -Level $Level
