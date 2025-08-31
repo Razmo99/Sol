@@ -68,21 +68,21 @@ InModuleScope 'sol' {
 
         Context "Verification" {
             It "Should show correct parameter counts" {
-                Write-Host "`n=== Dynamic Parameter Verification ===" -ForegroundColor Green
+
 
                 # Check Get-ChildItem original parameters
                 $OriginalCommand = Get-Command -Name 'Get-ChildItem'
-                Write-Host "Original Get-ChildItem parameter count: $($OriginalCommand.Parameters.Count)" -ForegroundColor Cyan
+
 
                 # Check our dynamic parameters
                 $DynamicParams = Get-DynamicParameter -CommandName 'Get-ChildItem'
-                Write-Host "Generated dynamic parameter count: $($DynamicParams.Count)" -ForegroundColor Yellow
-                Write-Host "Sample dynamic parameters: $($DynamicParams.Keys | Select-Object -First 5 | Join-String -Separator ', ')" -ForegroundColor Yellow
+
+
 
                 # Verify math: Original - Common = Dynamic
                 $CommonParams = [string[]][Internal.CommonParameters].GetProperties().Name
                 $ExpectedCount = $OriginalCommand.Parameters.Count - $CommonParams.Count
-                Write-Host "Expected dynamic count: $ExpectedCount (Original: $($OriginalCommand.Parameters.Count) - Common: $($CommonParams.Count))" -ForegroundColor Green
+
 
                 $DynamicParams.Count | Should -Be $ExpectedCount
             }

@@ -1,85 +1,117 @@
+using namespace System.Collections
+using namespace System.Collections.Generic
+
 function Get-TopologicalSort {
-    # Function from https://stackoverflow.com/questions/8982782/does-anyone-have-a-dependency-graph-and-topological-sorting-code-snippet-for-pow
+    <#
+    .SYNOPSIS
+        Performs topological sorting on a dependency graph using non-destructive Kahn's algorithm.
+
+    .DESCRIPTION
+        Takes a hashtable representing an edge list (dependencies) and returns an array of nodes
+        in topologically sorted order. Uses tracking structures to preserve original data integrity.
+
+    .PARAMETER edgeList
+        Hashtable where keys are nodes and values are arrays of their dependencies.
+
+    .OUTPUTS
+        Object[]
+        Returns an array of nodes in topologically sorted order.
+
+    .EXAMPLE
+        $edges = @{ 'A' = @(); 'B' = @('A'); 'C' = @('B') }
+        Get-TopologicalSort -edgeList $edges
+        # Returns: A, B, C
+
+    .NOTES
+        Algorithm from http://en.wikipedia.org/wiki/Topological_sorting#Algorithms
+        Non-destructive implementation preserves original edgeList data.
+    #>
+    [OutputType([object[]])]
+    [CmdletBinding()]
     param(
-        [Parameter(Mandatory = $true, Position = 0)]
-        [hashtable] $edgeList
+        [Parameter(Mandatory, Position = 0)]
+        [hashtable]$edgeList
     )
 
-    # Make sure we can use HashSet
-    Add-Type -AssemblyName System.Core
+    # Early return for empty input
+    if ($edgeList.Count -eq 0) {
+        return @()
+    }
 
-    # Clone it so as to not alter original
-    $currentEdgeList = [hashtable] (Get-ClonedObject $edgeList)
+    # Non-destructive tracking structures - NO CLONING NEEDED
+    $visited = @{}
+    $inDegreeCount = @{}
+    $queue = [Queue]::new()
+    $result = [List[object]]::new()
+    $allNodes = [HashSet[object]]::new()
 
-    # algorithm from http://en.wikipedia.org/wiki/Topological_sorting#Algorithms
-    $topologicallySortedElements = New-Object System.Collections.ArrayList
-    $setOfAllNodesWithNoIncomingEdges = New-Object System.Collections.Queue
+    # Initialize tracking structures from original data (non-destructive)
+    foreach ($node in $edgeList.Keys) {
+        $inDegreeCount[$node] = 0
+        [void]$allNodes.Add($node)
+    }
 
-    $fasterEdgeList = @{}
-
-    # Keep track of all nodes in case they put it in as an edge destination but not source
-    $allGraphNodes = New-Object -TypeName System.Collections.Generic.HashSet[object] -ArgumentList (, [object[]] $currentEdgeList.Keys)
-    $MissingSourceNodes = New-Object System.Collections.Queue
-    # Iterate over all Keys in Edge List
-
-    function Assert-Node {
-        foreach ($currentNode in $currentEdgeList.Keys) {
-            $currentDestinationNodes = [array] $currentEdgeList[$currentNode]
-            # If the current node's array is empty, meaning it has no incoming edges
-            if ($currentDestinationNodes.Length -eq 0) {
-                $setOfAllNodesWithNoIncomingEdges.Enqueue($currentNode)
-            }
-            # Iterate over nodes and make sure it exists in all nodes otherwise enqueue to remove it.
-            foreach ($currentDestinationNode in $currentDestinationNodes) {
-                if (!$allGraphNodes.Contains($currentDestinationNode)) {
-                    if ($currentEdgeList.ContainsKey($currentDestinationNode)) {
-                        [void] $allGraphNodes.add($currentDestinationNode)
-                    }
-                    else {
-                        $MissingSourceNodes.Enqueue($currentNode)
-                        Write-Log -Level Debug -Message '{0}: Criteria Not Met | Destination Node Missing for: {1}' -Arguments @($CurrentNode, $currentDestinationNode)
-                    }
+    # Calculate in-degrees from dependencies (non-destructive read)
+    # If A depends on B, then A should have higher in-degree (come later in sort)
+    foreach ($node in $edgeList.Keys) {
+        $dependencies = $edgeList[$node]
+        if ($null -ne $dependencies) {
+            foreach ($dependency in $dependencies) {
+                # Add missing nodes that appear as dependencies
+                if (-not $allNodes.Contains($dependency)) {
+                    [void]$allNodes.Add($dependency)
+                    $inDegreeCount[$dependency] = 0
                 }
+                # The dependent node (not the dependency) gets the in-degree count
+                $inDegreeCount[$node]++
             }
-
-            # Take this time to convert them to a HashSet for faster operation
-            $currentDestinationNodes = New-Object -TypeName System.Collections.Generic.HashSet[object] -ArgumentList (, [object[]] $currentDestinationNodes )
-            [void] $fasterEdgeList.Add($currentNode, $currentDestinationNodes)
         }
     }
-    Assert-Nodes
-    While ($MissingSourceNodes.count -gt 0) {
-        # This is so nasty
-        $currentMissingNode = $MissingSourceNodes.Dequeue()
-        $currentEdgeList.Remove($currentMissingNode)
-        $allGraphNodes.Clear()
-        $setOfAllNodesWithNoIncomingEdges.Clear()
-        $fasterEdgeList.Clear()
-        Assert-Nodes
+
+    # Find all nodes with no incoming edges
+    foreach ($node in $allNodes) {
+        if ($inDegreeCount[$node] -eq 0) {
+            $queue.Enqueue($node)
+        }
     }
 
-    $currentEdgeList = $fasterEdgeList
+    # Process nodes using Kahn's algorithm (non-destructive)
+    while ($queue.Count -gt 0) {
+        $currentNode = $queue.Dequeue()
+        $result.Add($currentNode)
+        $visited[$currentNode] = $true
 
-    while ($setOfAllNodesWithNoIncomingEdges.Count -gt 0) {
-        $currentNode = $setOfAllNodesWithNoIncomingEdges.Dequeue()
-        [void] $currentEdgeList.Remove($currentNode)
-        [void] $topologicallySortedElements.Add($currentNode)
-
-        foreach ($currentEdgeSourceNode in $currentEdgeList.Keys) {
-            $currentNodeDestinations = $currentEdgeList[$currentEdgeSourceNode]
-            if ($currentNodeDestinations.Contains($currentNode)) {
-                [void] $currentNodeDestinations.Remove($currentNode)
-
-                if ($currentNodeDestinations.Count -eq 0) {
-                    [void] $setOfAllNodesWithNoIncomingEdges.Enqueue($currentEdgeSourceNode)
+        # Find all nodes that depend on the current node and decrease their in-degree
+        foreach ($nodeKey in $edgeList.Keys) {
+            $nodeDependencies = $edgeList[$nodeKey]
+            if ($null -ne $nodeDependencies -and $nodeDependencies -contains $currentNode) {
+                # This node depends on currentNode, so decrease its in-degree
+                if (-not $visited.ContainsKey($nodeKey)) {
+                    $inDegreeCount[$nodeKey]--
+                    
+                    # If no more incoming edges, add to queue
+                    if ($inDegreeCount[$nodeKey] -eq 0) {
+                        $queue.Enqueue($nodeKey)
+                    }
                 }
             }
         }
     }
 
-    if ($currentEdgeList.Count -gt 0) {
-        throw "Graph has at least one cycle!"
+    # Check for cycles (remaining unvisited nodes indicate circular dependencies)
+    $unvisitedNodes = [List[object]]::new()
+    foreach ($node in $allNodes) {
+        if (-not $visited.ContainsKey($node)) {
+            $unvisitedNodes.Add($node)
+        }
     }
 
-    return $topologicallySortedElements
+    if ($unvisitedNodes.Count -gt 0) {
+        $cycleNodes = $unvisitedNodes -join ', '
+        throw "Graph has at least one cycle involving nodes: $cycleNodes"
+    }
+
+    # Return as array for PowerShell pipeline compatibility
+    # Use comma operator to prevent PowerShell from unwrapping single-element arrays
+    return ,$result.ToArray()
 }
