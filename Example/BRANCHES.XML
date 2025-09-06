@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<companies>
+    <contoso>
+        <Sydney>
+            <name>Sydney</name>
+            <street>99 Contoso Place</street>
+            <po_box>P.O Box 9999</po_box>
+            <state>NSW</state>
+            <city>Sydney</city>
+            <office>Head Office</office>
+            <country>AU</country>
+            <department>HO</department>
+            <company>Contoso Ltd</company>
+            <post_code>2000</post_code>
+            <manager>contoso.manager</manager>
+            <logonscript>HO.bat</logonscript>
+            <ou>contoso.local/HeadOffice-9999</ou>
+            <drive_group>HO-FileAccess</drive_group>
+            <distro>HO-Staff</distro>
+        </Sydney>
+
+        <Perth>
+            <name>Perth</name>
+            <street>123 Mining Road</street>
+            <po_box>P.O Box 9998</po_box>
+            <state>WA</state>
+            <city>Perth</city>
+            <office>Outback Office</office>
+            <country>AU</country>
+            <department>OB</department>
+            <company>Contoso Ltd</company>
+            <post_code>6000</post_code>
+            <manager>outback.manager</manager>
+            <logonscript>OB.bat</logonscript>
+            <ou>contoso.local/OutBack-9998</ou>
+            <drive_group>OB-FileAccess</drive_group>
+            <distro>OB-Staff</distro>
+        </Perth>
+    </contoso>
+</companies>

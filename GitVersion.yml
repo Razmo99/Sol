@@ -1,0 +1,50 @@
+mode: mainline
+commit-date-format: "yyyyMMddTHHmmss"
+assembly-file-versioning-format: "{Major}.{Minor}.{Patch}.{env:GITHUB_RUN_NUMBER ?? 0}"
+assembly-informational-format: "{NuGetVersionV2}+Build.{env:GITHUB_RUN_NUMBER ?? local}.Branch.{EscapedBranchName}.Sha.{Sha}.Date.{CommitDate}"
+major-version-bump-message: 'semver:\s?(breaking|major)'
+minor-version-bump-message: 'semver:\s?(feature|minor)'
+patch-version-bump-message: 'semver:\s?(fix|patch)'
+no-bump-message: 'semver:\s?(none|skip)'
+commit-message-incrementing: Enabled
+
+branches:
+  main:
+    tag: ""
+    regex: ^main$
+    increment: Patch
+    is-mainline: true
+    tracks-release-branches: true
+  develop:
+    tag: "alpha"
+    regex: ^develop$
+    increment: Minor
+    source-branches: [ "main" ]
+    tracks-release-branches: false
+    is-mainline: false
+  hotfix:
+    tag: rc
+    regex: hotfix(es)?/\d+\.\d+\.\d+
+    increment: None
+    is-release-branch: true
+    prevent-increment-of-merged-branch-version: true
+    source-branches: [ "main" ]
+  release:
+    tag: rc
+    regex: releases?/\d+\.\d+\.\d+
+    increment: None
+    is-release-branch: true
+    prevent-increment-of-merged-branch-version: true
+    source-branches: [ "main", "develop" ]
+  pull-request:
+    regex: pull/
+    tag: pr
+    tag-number-pattern: '[/-](?<number>\d+)'
+    increment: Patch
+    source-branches: [ "main", "develop", "feature", "release", "hotfix" ]
+  feature:
+    regex: .*/
+    tag: useBranchName
+    source-branches: [ "main", "develop", "feature" ]
+    track-merge-target: true
+    tracks-release-branches: true

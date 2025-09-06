@@ -1,0 +1,123 @@
+name: "Setup and Test PowerShell Module"
+description: "Common setup and testing steps for PowerShell module CI/CD with GitTools, RequiredModules pattern, and enhanced Pester reporting"
+
+inputs:
+  powershell-version:
+    description: "PowerShell version to use"
+    required: false
+    default: "7.x"
+  run-tests:
+    description: "Whether to run Pester tests"
+    required: false
+    default: "true"
+  build-module:
+    description: "Whether to build the module"
+    required: false
+    default: "true"
+  analyzer-severity:
+    description: "PSScriptAnalyzer severity level"
+    required: false
+    default: "Error,Warning"
+  test-path:
+    description: "Path to Pester tests"
+    required: false
+    default: "Tests"
+  test-report-name:
+    description: "Name for the test report"
+    required: false
+    default: "Test Results"
+  test-report-title:
+    description: "Title for the test report"
+    required: false
+    default: "PowerShell Module Tests"
+
+outputs:
+  version:
+    description: "Version from GitVersion"
+    value: ${{ steps.gitversion.outputs.majorMinorPatch }}
+  semver:
+    description: "Semantic version from GitVersion"
+    value: ${{ steps.gitversion.outputs.semVer }}
+  nugetVersion:
+    description: "NuGet version"
+    value: ${{ steps.gitversion.outputs.nuGetVersionV2 }}
+  informationalVersion:
+    description: "Full informational version"
+    value: ${{ steps.gitversion.outputs.informationalVersion }}
+  test-results-path:
+    description: "Path to test results file"
+    value: ${{ steps.test-report.outputs.test_results_path }}
+  tests-passed:
+    description: "Number of tests passed"
+    value: ${{ steps.test-report.outputs.passed_count }}
+  tests-failed:
+    description: "Number of tests failed"
+    value: ${{ steps.test-report.outputs.failed_count }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install GitVersion
+      uses: gittools/actions/gitversion/setup@v0.10.2
+      with:
+        versionSpec: "5.x"
+
+    - name: Determine Version
+      id: gitversion
+      uses: gittools/actions/gitversion/execute@v0.10.2
+      with:
+        useConfigFile: true
+        configFilePath: ./GitVersion.yml
+
+    - name: ⚡ Install Required Modules
+      uses: JustinGrote/ModuleFast-action@v0.0.1
+    
+    # Build module before testing
+    - name: Build module
+      shell: pwsh
+      if: inputs.build-module == 'true'
+      env:
+        GITVERSION_MAJORMINORPATCH: ${{ steps.gitversion.outputs.majorMinorPatch }}
+        GITVERSION_SEMVER: ${{ steps.gitversion.outputs.semVer }}
+        GITVERSION_NUGETVERSION: ${{ steps.gitversion.outputs.nuGetVersionV2 }}
+        GITVERSION_INFORMATIONALVERSION: ${{ steps.gitversion.outputs.informationalVersion }}
+        GITVERSION_ASSEMBLYSEMVER: ${{ steps.gitversion.outputs.assemblySemVer }}
+        GITVERSION_ASSEMBLYSEMFILEVER: ${{ steps.gitversion.outputs.assemblySemFileVer }}
+      run: |
+        Write-Information "Building module version: $env:GITVERSION_SEMVER"
+
+        $buildParams = @{
+            UseGitVersion = $true
+            UnversionedOutputDirectory = $false
+        }
+        ./build.ps1 @buildParams
+
+    # Use zyborg's pester-tests-report for rich test reporting
+    - name: Run Pester tests with reporting
+      id: pester
+      if: inputs.run-tests == 'true'
+      uses: zyborg/pester-tests-report@v1
+      with:
+        include_paths: ${{ inputs.test-path }}
+        report_name: ${{ inputs.test-report-name }}
+        report_title: ${{ inputs.test-report-title }}
+        github_token: ${{ github.token }}
+        tests_fail_step: true
+        skip_check_run: true # Our test results are too large
+    - name: Summarize test results
+      id: test-report
+      shell: pwsh
+      run: | # PowerShell
+        Write-ActionInfo 'Total Tests Executed...:  ${{ steps.pester.outputs.total_count }}'
+        Write-ActionInfo 'Total Tests Passed.....:  ${{ steps.pester.outputs.passed_count }}'
+        if (${{ steps.pester.outputs.failed_count }} -gt 0) {
+          Set-ActionFailed 'Total Tests Failed.....:  ${{ steps.pester.outputs.failed_count }}'
+        } else {
+          Write-ActionInfo 'Total Tests Failed.....:  ${{ steps.pester.outputs.failed_count }}'
+        }
+        
+        # Set outputs for the composite action
+        echo "passed_count=${{ steps.pester.outputs.passed_count }}" >> $env:GITHUB_OUTPUT
+        echo "failed_count=${{ steps.pester.outputs.failed_count }}" >> $env:GITHUB_OUTPUT
+        echo "total_count=${{ steps.pester.outputs.total_count }}" >> $env:GITHUB_OUTPUT
+        echo "test_results_path=${{ steps.pester.outputs.test_results_path }}" >> $env:GITHUB_OUTPUT

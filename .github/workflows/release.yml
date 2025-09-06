@@ -1,0 +1,170 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (leave empty to use GitVersion)'
+        required: false
+        type: string
+        default: ''
+      prerelease:
+        description: 'Create as prerelease'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Required for GitVersion
+
+      - name: Setup and Test Module
+        id: build-test
+        uses: ./.github/actions/setup-and-test
+        with:
+          powershell-version: '7.x'
+          run-tests: 'true'
+          build-module: 'true'
+          analyzer-severity: 'Error'  # Only fail on errors for release
+          test-report-name: 'Release Tests'
+          test-report-title: 'Release Build Test Results'
+
+      - name: Verify release quality
+        shell: pwsh
+        run: |
+          # Additional release-specific quality checks
+          Write-Host "Release Quality Verification" -ForegroundColor Green
+          Write-Host "Version: ${{ steps.build-test.outputs.version }}" -ForegroundColor Cyan
+          Write-Host "SemVer: ${{ steps.build-test.outputs.semver }}" -ForegroundColor Cyan
+          
+          # Fail if tests didn't pass
+          if ('${{ steps.build-test.outputs.tests-failed }}' -ne '0') {
+            throw "Cannot release with failing tests"
+          }
+          
+          Write-Host "All quality checks passed!" -ForegroundColor Green
+
+      - name: Create NuGet package
+        id: create-package
+        shell: pwsh
+        run: |
+          Write-Host "Creating NuGet package..." -ForegroundColor Green
+          
+          $version = if ('${{ github.event.inputs.version }}') {
+            '${{ github.event.inputs.version }}'
+          } else {
+            '${{ steps.build-test.outputs.semver }}'
+          }
+          
+          $packagePath = './packages'
+          New-Item -ItemType Directory -Path $packagePath -Force | Out-Null
+          
+          Register-PSRepository -Name 'LocalBuild' `
+          -SourceLocation $packagePath `
+          -InstallationPolicy 'Trusted'
+          
+          Publish-Module -Path './output/sol' `
+          -Repository 'LocalBuild' `
+          -NuGetApiKey 'release-key'
+          
+          # Find the .nupkg file
+          $nupkgFile = Get-ChildItem $packagePath -Filter "*.nupkg" | Select-Object -First 1
+          if ($nupkgFile) {
+            Write-Host "NuGet package created: $($nupkgFile.Name) ($([math]::Round($nupkgFile.Length/1MB, 2)) MB)" -ForegroundColor Green
+            echo "nupkg_name=$($nupkgFile.Name)" >> $env:GITHUB_OUTPUT
+            echo "nupkg_path=$($nupkgFile.FullName)" >> $env:GITHUB_OUTPUT
+          } else {
+            throw "Failed to create NuGet package"
+          }
+
+      - name: Generate release notes
+        id: release_notes
+        uses: mikepenz/release-changelog-builder-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          configuration: |
+            {
+              "template": "## Sol PowerShell Module v${{ steps.build-test.outputs.semver }}\n\n### What's Changed\n#{{CHANGELOG}}\n\n### Installation\n\n```powershell\n# Download the .nupkg file, then:\nInstall-Module -Path ./Sol.${{ steps.build-test.outputs.semver }}.nupkg -Scope CurrentUser\n```\n\n### Requirements\n- PowerShell 5.1 or later\n- Microsoft Graph PowerShell Module\n- ActiveDirectory PowerShell Module\n- Logging Module\n\n### Test Results\n- Tests Passed: ${{ steps.build-test.outputs.tests-passed }}\n- Tests Failed: ${{ steps.build-test.outputs.tests-failed }}\n\n**Full Changelog**: #{{RELEASE_DIFF}}\n\n### Contributors\n#{{CONTRIBUTORS}}",
+              "commitMode": true,
+              "categories": [
+                {
+                  "title": "## 🚀 Features",
+                  "labels": ["feature", "enhancement"]
+                },
+                {
+                  "title": "## 🐛 Bug Fixes",
+                  "labels": ["bug", "fix"]
+                },
+                {
+                  "title": "## 📝 Documentation",
+                  "labels": ["documentation", "docs"]
+                },
+                {
+                  "title": "## 🧰 Maintenance",
+                  "labels": ["maintenance", "chore"]
+                },
+                {
+                  "title": "## ⬆️ Dependencies",
+                  "labels": ["dependencies"]
+                }
+              ],
+              "sort": {
+                "order": "DESC",
+                "on_property": "mergedAt"
+              },
+              "label_extractor": [
+                {
+                  "pattern": "(feat|feature)",
+                  "target": "feature"
+                },
+                {
+                  "pattern": "(fix|bug)",
+                  "target": "bug"
+                },
+                {
+                  "pattern": "(docs|documentation)",
+                  "target": "documentation"
+                }
+              ],
+              "duplicate_filter": true,
+              "transformers": [
+                {
+                  "pattern": "\\[skip ci\\]",
+                  "flags": "ig",
+                  "target": ""
+                }
+              ]
+            }
+
+      - name: Create GitHub Release and Upload Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.build-test.outputs.semver }}
+          name: Sol v${{ steps.build-test.outputs.semver }}
+          body: ${{ steps.release_notes.outputs.changelog }}
+          files: ${{ steps.create-package.outputs.nupkg_path }}
+          prerelease: ${{ contains(steps.build-test.outputs.semver, '-') }}
+          draft: false
+
+      - name: Generate build attestation
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: ${{ steps.create-package.outputs.nupkg_path }}

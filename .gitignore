@@ -1,5 +1,15 @@
-# Cache objects
 packer_cache/
 
 # For built boxes
 *.box
+output/
+
+# Web bundles and build artifacts
+*.bundle.js
+*.bundle.css
+*.min.js
+*.min.css
+dist/
+build/
+node_modules/
+# .gemini/*

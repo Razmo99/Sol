@@ -1,0 +1,43 @@
+name: Continuous Integration
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  build-and-test:
+    name: Build and Test PowerShell Module (PS ${{ matrix.powershell-version }})
+    runs-on: windows-latest
+    strategy:
+      max-parallel: 1
+      matrix:
+        powershell-version: ['5.1', '7.x']
+    
+    outputs:
+      version: ${{ steps.setup-and-test.outputs.version }}
+      semver: ${{ steps.setup-and-test.outputs.semver }}
+      nugetVersion: ${{ steps.setup-and-test.outputs.nugetVersion }}
+      informationalVersion: ${{ steps.setup-and-test.outputs.informationalVersion }}
+   
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Required for GitVersion to calculate version from history
+      
+      - name: Setup and Test Module
+        id: setup-and-test
+        uses: ./.github/actions/setup-and-test
+        with:
+          powershell-version: ${{ matrix.powershell-version }}
+          run-tests: 'true'
+          build-module: 'true'
+          analyzer-severity: 'Error,Warning'  # Can be set to 'none' to skip PSScriptAnalyzer
+          test-path: 'Tests'
+          test-report-name: 'Test Results - PS ${{ matrix.powershell-version }}'
+          test-report-title: 'PowerShell ${{ matrix.powershell-version }} Test Results'
